@@ -1,0 +1,158 @@
+{
+  "input_dir": "/Volumes/p4510_8t_static/photos/20250929国庆",
+  "cache_output_dir": "/Volumes/mac_ext/temp/raw_converted",
+  "embedding_model_id": "damo/multi-modal_clip-vit-base-patch16_zh",
+  "total_photos": 12,
+  "cluster_count": 3,
+  "singleton_count": 0,
+  "pair_similarity_threshold": 0.95,
+  "cluster_distance_threshold": 0.12,
+  "clusters": [
+    {
+      "cluster_id": 0,
+      "size": 6,
+      "average_similarity": 0.9387141863505045,
+      "items": [
+        {
+          "source_path": "/Volumes/p4510_8t_static/photos/20250929国庆/_DSC0060.ARW",
+          "jpg_path": "/Volumes/mac_ext/temp/raw_converted/20250929国庆___DSC0060.jpg"
+        },
+        {
+          "source_path": "/Volumes/p4510_8t_static/photos/20250929国庆/_DSC0061.ARW",
+          "jpg_path": "/Volumes/mac_ext/temp/raw_converted/20250929国庆___DSC0061.jpg"
+        },
+        {
+          "source_path": "/Volumes/p4510_8t_static/photos/20250929国庆/_DSC0062.ARW",
+          "jpg_path": "/Volumes/mac_ext/temp/raw_converted/20250929国庆___DSC0062.jpg"
+        },
+        {
+          "source_path": "/Volumes/p4510_8t_static/photos/20250929国庆/_DSC0063.ARW",
+          "jpg_path": "/Volumes/mac_ext/temp/raw_converted/20250929国庆___DSC0063.jpg"
+        },
+        {
+          "source_path": "/Volumes/p4510_8t_static/photos/20250929国庆/_DSC0064.ARW",
+          "jpg_path": "/Volumes/mac_ext/temp/raw_converted/20250929国庆___DSC0064.jpg"
+        },
+        {
+          "source_path": "/Volumes/p4510_8t_static/photos/20250929国庆/_DSC0065.ARW",
+          "jpg_path": "/Volumes/mac_ext/temp/raw_converted/20250929国庆___DSC0065.jpg"
+        }
+      ]
+    },
+    {
+      "cluster_id": 2,
+      "size": 4,
+      "average_similarity": 0.9596392214298248,
+      "items": [
+        {
+          "source_path": "/Volumes/p4510_8t_static/photos/20250929国庆/_DSC0068.ARW",
+          "jpg_path": "/Volumes/mac_ext/temp/raw_converted/20250929国庆___DSC0068.jpg"
+        },
+        {
+          "source_path": "/Volumes/p4510_8t_static/photos/20250929国庆/_DSC0069.ARW",
+          "jpg_path": "/Volumes/mac_ext/temp/raw_converted/20250929国庆___DSC0069.jpg"
+        },
+        {
+          "source_path": "/Volumes/p4510_8t_static/photos/20250929国庆/_DSC0070.ARW",
+          "jpg_path": "/Volumes/mac_ext/temp/raw_converted/20250929国庆___DSC0070.jpg"
+        },
+        {
+          "source_path": "/Volumes/p4510_8t_static/photos/20250929国庆/_DSC0071.ARW",
+          "jpg_path": "/Volumes/mac_ext/temp/raw_converted/20250929国庆___DSC0071.jpg"
+        }
+      ]
+    },
+    {
+      "cluster_id": 1,
+      "size": 2,
+      "average_similarity": 0.9869478344917297,
+      "items": [
+        {
+          "source_path": "/Volumes/p4510_8t_static/photos/20250929国庆/_DSC0066.ARW",
+          "jpg_path": "/Volumes/mac_ext/temp/raw_converted/20250929国庆___DSC0066.jpg"
+        },
+        {
+          "source_path": "/Volumes/p4510_8t_static/photos/20250929国庆/_DSC0067.ARW",
+          "jpg_path": "/Volumes/mac_ext/temp/raw_converted/20250929国庆___DSC0067.jpg"
+        }
+      ]
+    }
+  ],
+  "similar_pairs": [
+    {
+      "similarity": 0.9996037483215332,
+      "source_path": "/Volumes/p4510_8t_static/photos/20250929国庆/_DSC0070.ARW",
+      "target_path": "/Volumes/p4510_8t_static/photos/20250929国庆/_DSC0071.ARW",
+      "source_jpg_path": "/Volumes/mac_ext/temp/raw_converted/20250929国庆___DSC0070.jpg",
+      "target_jpg_path": "/Volumes/mac_ext/temp/raw_converted/20250929国庆___DSC0071.jpg"
+    },
+    {
+      "similarity": 0.9991986155509949,
+      "source_path": "/Volumes/p4510_8t_static/photos/20250929国庆/_DSC0068.ARW",
+      "target_path": "/Volumes/p4510_8t_static/photos/20250929国庆/_DSC0069.ARW",
+      "source_jpg_path": "/Volumes/mac_ext/temp/raw_converted/20250929国庆___DSC0068.jpg",
+      "target_jpg_path": "/Volumes/mac_ext/temp/raw_converted/20250929国庆___DSC0069.jpg"
+    },
+    {
+      "similarity": 0.998641312122345,
+      "source_path": "/Volumes/p4510_8t_static/photos/20250929国庆/_DSC0060.ARW",
+      "target_path": "/Volumes/p4510_8t_static/photos/20250929国庆/_DSC0061.ARW",
+      "source_jpg_path": "/Volumes/mac_ext/temp/raw_converted/20250929国庆___DSC0060.jpg",
+      "target_jpg_path": "/Volumes/mac_ext/temp/raw_converted/20250929国庆___DSC0061.jpg"
+    },
+    {
+      "similarity": 0.998262345790863,
+      "source_path": "/Volumes/p4510_8t_static/photos/20250929国庆/_DSC0064.ARW",
+      "target_path": "/Volumes/p4510_8t_static/photos/20250929国庆/_DSC0065.ARW",
+      "source_jpg_path": "/Volumes/mac_ext/temp/raw_converted/20250929国庆___DSC0064.jpg",
+      "target_jpg_path": "/Volumes/mac_ext/temp/raw_converted/20250929国庆___DSC0065.jpg"
+    },
+    {
+      "similarity": 0.9970579147338867,
+      "source_path": "/Volumes/p4510_8t_static/photos/20250929国庆/_DSC0062.ARW",
+      "target_path": "/Volumes/p4510_8t_static/photos/20250929国庆/_DSC0063.ARW",
+      "source_jpg_path": "/Volumes/mac_ext/temp/raw_converted/20250929国庆___DSC0062.jpg",
+      "target_jpg_path": "/Volumes/mac_ext/temp/raw_converted/20250929国庆___DSC0063.jpg"
+    },
+    {
+      "similarity": 0.9869478344917297,
+      "source_path": "/Volumes/p4510_8t_static/photos/20250929国庆/_DSC0066.ARW",
+      "target_path": "/Volumes/p4510_8t_static/photos/20250929国庆/_DSC0067.ARW",
+      "source_jpg_path": "/Volumes/mac_ext/temp/raw_converted/20250929国庆___DSC0066.jpg",
+      "target_jpg_path": "/Volumes/mac_ext/temp/raw_converted/20250929国庆___DSC0067.jpg"
+    },
+    {
+      "similarity": 0.9782496690750122,
+      "source_path": "/Volumes/p4510_8t_static/photos/20250929国庆/_DSC0062.ARW",
+      "target_path": "/Volumes/p4510_8t_static/photos/20250929国庆/_DSC0065.ARW",
+      "source_jpg_path": "/Volumes/mac_ext/temp/raw_converted/20250929国庆___DSC0062.jpg",
+      "target_jpg_path": "/Volumes/mac_ext/temp/raw_converted/20250929国庆___DSC0065.jpg"
+    },
+    {
+      "similarity": 0.9759820103645325,
+      "source_path": "/Volumes/p4510_8t_static/photos/20250929国庆/_DSC0063.ARW",
+      "target_path": "/Volumes/p4510_8t_static/photos/20250929国庆/_DSC0065.ARW",
+      "source_jpg_path": "/Volumes/mac_ext/temp/raw_converted/20250929国庆___DSC0063.jpg",
+      "target_jpg_path": "/Volumes/mac_ext/temp/raw_converted/20250929国庆___DSC0065.jpg"
+    },
+    {
+      "similarity": 0.9756688475608826,
+      "source_path": "/Volumes/p4510_8t_static/photos/20250929国庆/_DSC0062.ARW",
+      "target_path": "/Volumes/p4510_8t_static/photos/20250929国庆/_DSC0064.ARW",
+      "source_jpg_path": "/Volumes/mac_ext/temp/raw_converted/20250929国庆___DSC0062.jpg",
+      "target_jpg_path": "/Volumes/mac_ext/temp/raw_converted/20250929国庆___DSC0064.jpg"
+    },
+    {
+      "similarity": 0.9733119010925293,
+      "source_path": "/Volumes/p4510_8t_static/photos/20250929国庆/_DSC0063.ARW",
+      "target_path": "/Volumes/p4510_8t_static/photos/20250929国庆/_DSC0064.ARW",
+      "source_jpg_path": "/Volumes/mac_ext/temp/raw_converted/20250929国庆___DSC0063.jpg",
+      "target_jpg_path": "/Volumes/mac_ext/temp/raw_converted/20250929国庆___DSC0064.jpg"
+    }
+  ],
+  "singletons": [],
+  "embedding_shape": [
+    12,
+    512
+  ]
+}

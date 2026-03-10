@@ -1,0 +1,512 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Photo Maker Cluster</title>
+  <style>
+    :root {
+      --bg: #f2ede3;
+      --panel: rgba(255, 252, 247, 0.78);
+      --panel-strong: rgba(255, 248, 237, 0.96);
+      --line: rgba(68, 54, 40, 0.12);
+      --ink: #231b14;
+      --muted: #746557;
+      --shadow: 0 22px 60px rgba(66, 49, 26, 0.14);
+      --radius: 24px;
+      --mono: "SF Mono", "JetBrains Mono", "Cascadia Code", monospace;
+      --serif: "Iowan Old Style", "Palatino Linotype", "Book Antiqua", Palatino, serif;
+    }
+
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      font-family: var(--serif);
+      color: var(--ink);
+      background:
+        radial-gradient(circle at top left, rgba(255, 221, 180, 0.7), transparent 28%),
+        radial-gradient(circle at top right, rgba(214, 107, 70, 0.22), transparent 22%),
+        linear-gradient(135deg, #efe6d7 0%, #f7f3eb 36%, #e7dccf 100%);
+    }
+
+    .shell {
+      width: min(1360px, calc(100vw - 32px));
+      margin: 24px auto;
+      display: grid;
+      grid-template-columns: 380px minmax(0, 1fr);
+      gap: 20px;
+    }
+
+    .panel {
+      backdrop-filter: blur(18px);
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+    }
+
+    .sidebar, .main {
+      padding: 24px;
+      display: flex;
+      flex-direction: column;
+      gap: 18px;
+    }
+
+    .hero {
+      padding: 26px;
+      background: linear-gradient(160deg, rgba(190, 79, 47, 0.96), rgba(84, 38, 26, 0.92));
+      color: #fff8f1;
+      border-radius: 26px;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .hero::after {
+      content: "";
+      position: absolute;
+      inset: auto -40px -60px auto;
+      width: 180px;
+      height: 180px;
+      border-radius: 999px;
+      background: radial-gradient(circle, rgba(255, 214, 181, 0.42), transparent 68%);
+    }
+
+    .eyebrow {
+      font-family: var(--mono);
+      font-size: 12px;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      opacity: 0.76;
+    }
+
+    h1, h2, h3 { margin: 0; font-weight: 600; }
+    h1 { margin-top: 12px; font-size: clamp(28px, 4vw, 42px); line-height: 1.02; }
+    .muted { margin: 0; color: var(--muted); }
+    .hero p { margin: 12px 0 0; color: rgba(255, 245, 233, 0.86); font-size: 15px; line-height: 1.6; }
+
+    .block {
+      padding: 20px;
+      border-radius: 22px;
+      background: var(--panel-strong);
+      border: 1px solid var(--line);
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    label { font-size: 14px; font-weight: 600; }
+
+    input {
+      width: 100%;
+      border: 1px solid rgba(80, 61, 45, 0.16);
+      border-radius: 16px;
+      padding: 14px 16px;
+      background: rgba(255, 255, 255, 0.88);
+      color: var(--ink);
+      font-size: 14px;
+      font-family: var(--mono);
+    }
+
+    .button-row {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 10px;
+    }
+
+    button {
+      border: none;
+      border-radius: 999px;
+      padding: 14px 18px;
+      cursor: pointer;
+      font-size: 14px;
+      font-weight: 700;
+      transition: transform 180ms ease, box-shadow 180ms ease, opacity 180ms ease;
+    }
+
+    button:hover { transform: translateY(-1px); box-shadow: 0 16px 24px rgba(70, 42, 25, 0.18); }
+    button:disabled { opacity: 0.56; cursor: not-allowed; transform: none; box-shadow: none; }
+    .primary { background: linear-gradient(135deg, #c75835, #8f311a); color: #fff8ef; }
+    .secondary { background: #efe2d0; color: #513828; }
+    .danger { background: linear-gradient(135deg, #514238, #231812); color: #fff4ed; }
+
+    .status-card {
+      padding: 22px;
+      border-radius: 24px;
+      background: linear-gradient(180deg, rgba(255, 255, 255, 0.72), rgba(248, 241, 231, 0.96));
+      border: 1px solid var(--line);
+      display: grid;
+      gap: 14px;
+    }
+
+    .progress-track {
+      height: 14px;
+      background: rgba(78, 55, 35, 0.08);
+      border-radius: 999px;
+      overflow: hidden;
+    }
+
+    .progress-fill {
+      height: 100%;
+      width: 0%;
+      background: linear-gradient(90deg, #bf4f2f 0%, #e8b577 100%);
+      border-radius: 999px;
+      transition: width 280ms ease;
+    }
+
+    .stats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+    .stat { padding: 16px; border-radius: 18px; background: rgba(255, 250, 244, 0.92); border: 1px solid rgba(79, 57, 35, 0.08); }
+    .stat strong { display: block; font-size: 26px; line-height: 1.1; margin-top: 6px; }
+    .chip-row { display: flex; flex-wrap: wrap; gap: 8px; }
+    .chip { display: inline-flex; align-items: center; gap: 6px; padding: 8px 12px; border-radius: 999px; background: rgba(191, 79, 47, 0.08); color: #7a351f; font-size: 12px; font-family: var(--mono); }
+    .results { display: grid; gap: 18px; }
+    .cluster-card { padding: 18px; border-radius: 22px; background: rgba(255, 252, 247, 0.92); border: 1px solid var(--line); display: grid; gap: 14px; }
+    .filter-bar { display: grid; gap: 10px; padding: 16px 18px; border-radius: 20px; background: rgba(255, 250, 244, 0.9); border: 1px solid rgba(79, 57, 35, 0.08); }
+    .filter-header { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+    .slider-wrap { display: grid; gap: 8px; }
+    .slider { width: 100%; padding: 0; border: none; background: transparent; }
+    .slider-hint { font-size: 12px; color: var(--muted); font-family: var(--mono); }
+    .thumb-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(168px, 1fr)); gap: 14px; }
+    .thumb { display: grid; gap: 8px; }
+    .thumb img { width: 100%; aspect-ratio: 1 / 1; object-fit: cover; border-radius: 18px; border: 1px solid rgba(67, 53, 42, 0.12); background: #efe8dc; }
+    .thumb .caption, .path-text { font-family: var(--mono); font-size: 12px; color: var(--muted); word-break: break-all; }
+    .empty { padding: 28px; border-radius: 22px; border: 1px dashed rgba(92, 70, 51, 0.22); color: var(--muted); text-align: center; background: rgba(255, 250, 244, 0.68); }
+
+    @media (max-width: 1080px) {
+      .shell { grid-template-columns: 1fr; }
+      .stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    }
+
+    @media (max-width: 720px) {
+      .shell { width: min(100vw - 18px, 100%); margin: 10px auto; }
+      .sidebar, .main { padding: 16px; }
+      .stats, .button-row { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <aside class="panel sidebar">
+      <section class="hero">
+        <div class="eyebrow">Photo Maker</div>
+        <h1>照片聚类工作台</h1>
+        <p>使用 macOS 系统原生目录选择器，后台并行准备图片缓存，并支持处理中途取消。</p>
+      </section>
+
+      <section class="block">
+        <label for="inputDir">照片目录</label>
+        <input id="inputDir" type="text" placeholder="点击“选择目录”调用系统对话框" readonly />
+
+        <label for="outputDir">JPG 缓存目录</label>
+        <input id="outputDir" type="text" />
+
+        <label for="workers">并行线程数</label>
+        <input id="workers" type="number" min="1" value="8" />
+
+        <label for="limit">处理上限</label>
+        <input id="limit" type="number" min="1" placeholder="为空表示整目录" />
+
+        <div class="filter-bar">
+          <div class="filter-header">
+            <strong>聚类相似度</strong>
+            <span id="similarityValue" class="chip">0.880</span>
+          </div>
+          <div class="slider-wrap">
+            <input id="similaritySlider" class="slider" type="range" min="0.500" max="0.990" step="0.005" value="0.880" />
+            <div id="similarityHint" class="slider-hint">越高越严格，越容易拆成更多 cluster</div>
+          </div>
+        </div>
+
+        <div class="button-row">
+          <button id="pickButton" class="secondary" type="button">选择目录</button>
+          <button id="startButton" class="primary" type="button">开始聚类</button>
+          <button id="cancelButton" class="danger" type="button" disabled>取消</button>
+        </div>
+      </section>
+
+      <section class="block">
+        <h3>当前目录</h3>
+        <div id="selectedPath" class="path-text">尚未选择目录</div>
+        <p class="muted">取消请求会在当前并行批次结束后尽快停止。</p>
+      </section>
+    </aside>
+
+    <main class="panel main">
+      <section class="status-card">
+        <div style="display:flex; justify-content:space-between; align-items:end; gap:16px; flex-wrap:wrap;">
+          <div>
+            <div class="eyebrow" style="color: var(--muted);">Job Status</div>
+            <h2 id="statusTitle">等待开始</h2>
+          </div>
+          <div id="statusMeta" class="chip-row"></div>
+        </div>
+
+        <div class="progress-track">
+          <div id="progressFill" class="progress-fill"></div>
+        </div>
+
+        <div id="statusMessage" class="muted">页面就绪。</div>
+      </section>
+
+      <section class="stats">
+        <div class="stat"><div class="eyebrow" style="color: var(--muted);">Photos</div><strong id="statPhotos">0</strong></div>
+        <div class="stat"><div class="eyebrow" style="color: var(--muted);">Clusters</div><strong id="statClusters">0</strong></div>
+        <div class="stat"><div class="eyebrow" style="color: var(--muted);">Result JSON</div><strong id="statResult" style="font-size:14px; line-height:1.45; word-break:break-all;">-</strong></div>
+      </section>
+
+      <section class="results">
+        <div>
+          <h2>聚类结果</h2>
+          <p class="muted">滑杆控制聚类相似度，越高表示聚类越严格。每个 cluster 会展示缩略图、文件路径和平均相似度。</p>
+        </div>
+        <div id="clustersContainer" class="empty">开始处理后，聚类结果会显示在这里。</div>
+      </section>
+    </main>
+  </div>
+
+  <script>
+    const state = { jobId: null, pollingTimer: null, currentResult: null, clusterSimilarityThreshold: 0.88 };
+
+    const inputDir = document.getElementById('inputDir');
+    const outputDir = document.getElementById('outputDir');
+    const workersInput = document.getElementById('workers');
+    const limitInput = document.getElementById('limit');
+    const pickButton = document.getElementById('pickButton');
+    const startButton = document.getElementById('startButton');
+    const cancelButton = document.getElementById('cancelButton');
+    const selectedPath = document.getElementById('selectedPath');
+    const statusTitle = document.getElementById('statusTitle');
+    const statusMessage = document.getElementById('statusMessage');
+    const progressFill = document.getElementById('progressFill');
+    const statusMeta = document.getElementById('statusMeta');
+    const statPhotos = document.getElementById('statPhotos');
+    const statClusters = document.getElementById('statClusters');
+    const statResult = document.getElementById('statResult');
+    const clustersContainer = document.getElementById('clustersContainer');
+    const similaritySlider = document.getElementById('similaritySlider');
+    const similarityValue = document.getElementById('similarityValue');
+    const similarityHint = document.getElementById('similarityHint');
+
+    async function requestJson(url, options) {
+      const response = await fetch(url, options);
+      const text = await response.text();
+      const data = text ? JSON.parse(text) : {};
+      if (!response.ok) {
+        throw new Error(data.detail || text || `Request failed: ${response.status}`);
+      }
+      return data;
+    }
+
+    function imageUrl(path) {
+      return `/api/image?path=${encodeURIComponent(path)}`;
+    }
+
+    function setStatus(title, message, percent, chips = []) {
+      statusTitle.textContent = title;
+      statusMessage.textContent = message;
+      progressFill.style.width = `${Math.max(0, Math.min(100, percent))}%`;
+      statusMeta.innerHTML = chips.map(chip => `<span class="chip">${chip}</span>`).join('');
+    }
+
+    function renderEmpty(element, text) {
+      element.className = 'empty';
+      element.innerHTML = text;
+    }
+
+    function setClusterSimilarityThreshold(value) {
+      state.clusterSimilarityThreshold = Number(value);
+      similaritySlider.value = state.clusterSimilarityThreshold.toFixed(3);
+      similarityValue.textContent = state.clusterSimilarityThreshold.toFixed(3);
+      similarityHint.textContent = `当前聚类相似度 ${state.clusterSimilarityThreshold.toFixed(3)}，越高越严格`;
+    }
+
+    function renderClusters(result) {
+      if (!result.clusters.length) {
+        renderEmpty(clustersContainer, '没有聚出多张相似图，当前结果只有单图或相似度不够高。');
+        return;
+      }
+      clustersContainer.className = 'results';
+      clustersContainer.innerHTML = result.clusters.map(cluster => `
+        <article class="cluster-card">
+          <div class="chip-row">
+            <span class="chip">Cluster ${cluster.cluster_id}</span>
+            <span class="chip">${cluster.size} 张</span>
+            <span class="chip">平均相似度 ${cluster.average_similarity.toFixed(4)}</span>
+          </div>
+          <div class="thumb-grid">
+            ${cluster.items.map(item => `
+              <div class="thumb">
+                <img loading="lazy" src="${imageUrl(item.jpg_path)}" alt="cluster item" />
+                <div class="caption">${item.source_path}</div>
+              </div>
+            `).join('')}
+          </div>
+        </article>
+      `).join('');
+    }
+
+    function renderPairs(result) {
+      const filteredPairs = result.similar_pairs.filter(
+        pair => pair.similarity >= state.similarityThreshold,
+      );
+
+      statPairs.textContent = `${filteredPairs.length}/${result.similar_pairs.length}`;
+
+      if (!filteredPairs.length) {
+        renderEmpty(pairsContainer, `当前滑杆阈值 ${state.similarityThreshold.toFixed(3)} 下没有匹配的高相似图片对。`);
+        return;
+      }
+      pairsContainer.className = 'results';
+      pairsContainer.innerHTML = filteredPairs.slice(0, 24).map(pair => `
+        <article class="pair-card">
+          <div class="chip-row"><span class="chip">相似度 ${pair.similarity.toFixed(4)}</span></div>
+          <div class="pair-grid">
+            <div class="thumb">
+              <img loading="lazy" src="${imageUrl(pair.source_jpg_path)}" alt="pair source" />
+              <div class="caption">${pair.source_path}</div>
+            </div>
+            <div class="thumb">
+              <img loading="lazy" src="${imageUrl(pair.target_jpg_path)}" alt="pair target" />
+              <div class="caption">${pair.target_path}</div>
+            </div>
+          </div>
+        </article>
+      `).join('');
+    }
+
+    function renderResult(result) {
+      state.currentResult = result;
+      statPhotos.textContent = result.total_photos;
+      statClusters.textContent = result.cluster_count;
+      statResult.textContent = result.result_path;
+      setClusterSimilarityThreshold(
+        result.cluster_similarity_threshold ?? state.clusterSimilarityThreshold,
+      );
+      renderClusters(result);
+    }
+
+    async function pickDirectory() {
+      try {
+        const data = await requestJson('/api/pick-directory', { method: 'POST' });
+        inputDir.value = data.path;
+        selectedPath.textContent = data.path;
+      } catch (error) {
+        setStatus('目录选择失败', String(error), 0, []);
+      }
+    }
+
+    async function pollJob() {
+      if (!state.jobId) return;
+      try {
+        const job = await requestJson(`/api/jobs/${state.jobId}`);
+        const chips = [`阶段 ${job.stage}`, `${Math.round(job.percent)}%`, `${job.current}/${job.total}`];
+        if (job.result_path) chips.push(`JSON ${job.result_path}`);
+        setStatus(
+          job.status === 'error' ? '处理失败' : job.status === 'cancelled' ? '已取消' : job.status === 'cancelling' ? '正在取消' : job.status === 'done' ? '处理完成' : '正在处理',
+          job.message,
+          job.percent,
+          chips,
+        );
+
+        if (job.status === 'done') {
+          clearInterval(state.pollingTimer);
+          state.pollingTimer = null;
+          startButton.disabled = false;
+          cancelButton.disabled = true;
+          pickButton.disabled = false;
+          renderResult(job.result);
+        } else if (job.status === 'error') {
+          clearInterval(state.pollingTimer);
+          state.pollingTimer = null;
+          startButton.disabled = false;
+          cancelButton.disabled = true;
+          pickButton.disabled = false;
+          renderEmpty(clustersContainer, `处理失败：${job.error}`);
+        } else if (job.status === 'cancelled') {
+          clearInterval(state.pollingTimer);
+          state.pollingTimer = null;
+          startButton.disabled = false;
+          cancelButton.disabled = true;
+          pickButton.disabled = false;
+          renderEmpty(clustersContainer, '任务已取消，没有继续展示聚类结果。');
+        }
+      } catch (error) {
+        clearInterval(state.pollingTimer);
+        state.pollingTimer = null;
+        startButton.disabled = false;
+        cancelButton.disabled = true;
+        pickButton.disabled = false;
+        setStatus('轮询失败', String(error), 0, []);
+      }
+    }
+
+    async function startJob() {
+      const payload = {
+        input_dir: inputDir.value.trim(),
+        output_dir: outputDir.value.trim(),
+        workers: workersInput.value ? Number(workersInput.value) : 8,
+        cluster_similarity_threshold: state.clusterSimilarityThreshold,
+        limit: limitInput.value ? Number(limitInput.value) : null,
+      };
+      if (!payload.input_dir) {
+        setStatus('缺少目录', '请先点击“选择目录”。', 0, []);
+        return;
+      }
+
+      startButton.disabled = true;
+      cancelButton.disabled = false;
+      pickButton.disabled = true;
+      renderEmpty(clustersContainer, '任务已开始，等待聚类结果。');
+
+      try {
+        const response = await requestJson('/api/jobs', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+        state.jobId = response.job_id;
+        setStatus('任务已启动', '服务器正在并行准备图片和计算聚类。', 2, [`job ${state.jobId}`, `workers ${payload.workers}`, `similarity ${payload.cluster_similarity_threshold.toFixed(3)}`]);
+        if (state.pollingTimer) clearInterval(state.pollingTimer);
+        state.pollingTimer = setInterval(pollJob, 1000);
+        pollJob();
+      } catch (error) {
+        startButton.disabled = false;
+        cancelButton.disabled = true;
+        pickButton.disabled = false;
+        setStatus('启动失败', String(error), 0, []);
+      }
+    }
+
+    async function cancelJob() {
+      if (!state.jobId) return;
+      cancelButton.disabled = true;
+      try {
+        await requestJson(`/api/jobs/${state.jobId}/cancel`, { method: 'POST' });
+        setStatus('正在取消', '已经发送取消请求，等待当前批次结束。', Number(progressFill.style.width.replace('%', '') || '0'), ['cancel requested']);
+      } catch (error) {
+        cancelButton.disabled = false;
+        setStatus('取消失败', String(error), Number(progressFill.style.width.replace('%', '') || '0'), []);
+      }
+    }
+
+    async function bootstrap() {
+      const defaults = await requestJson('/api/defaults');
+      outputDir.value = defaults.output_dir;
+      workersInput.value = '8';
+      setClusterSimilarityThreshold(state.clusterSimilarityThreshold);
+      setStatus('等待开始', '点击“选择目录”会调用系统原生目录选择器。滑杆会控制聚类严格程度。', 0, [defaults.output_dir]);
+    }
+
+    pickButton.addEventListener('click', pickDirectory);
+    startButton.addEventListener('click', startJob);
+    cancelButton.addEventListener('click', cancelJob);
+    similaritySlider.addEventListener('input', event => {
+      setClusterSimilarityThreshold(event.target.value);
+    });
+
+    bootstrap().catch(error => {
+      setStatus('初始化失败', String(error), 0, []);
+    });
+  </script>
+</body>
+</html>

@@ -1,3 +1,10 @@
 rawpy
 Pillow
 openai
+modelscope
+torch
+torchvision
+scikit-learn
+oss2
+fastapi
+uvicorn
