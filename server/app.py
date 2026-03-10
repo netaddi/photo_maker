@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import json
+import queue
 import subprocess
 import threading
 from datetime import datetime, timezone
@@ -8,11 +10,24 @@ from typing import Any
 from uuid import uuid4
 
 from fastapi import FastAPI, HTTPException, Query
-from fastapi.responses import FileResponse, HTMLResponse
+from fastapi.responses import FileResponse, HTMLResponse, StreamingResponse
 from pydantic import BaseModel
 
-from cluster_photos import JobCancelledError, run_clustering
+from cluster_photos import (
+    JobCancelledError,
+    clear_embedding_cache,
+    get_embedding_cache_status,
+    run_clustering,
+)
 from convert_raw_to_jpg import OUTPUT_DIR
+from photo_description_config import API_BASE_URL
+from vlm_pick import (
+    DEFAULT_VLM_PICK_PROMPT,
+    VlmPickCancelledError,
+    clear_vlm_pick_results,
+    fetch_model_ids,
+    run_vlm_pick,
+)
 
 
 APP_ROOT = Path(__file__).resolve().parent
@@ -22,6 +37,8 @@ ALLOWED_IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp"}
 app = FastAPI(title="Photo Maker Cluster Server")
 jobs: dict[str, dict[str, Any]] = {}
 jobs_lock = threading.Lock()
+vlm_jobs: dict[str, dict[str, Any]] = {}
+vlm_jobs_lock = threading.Lock()
 
 
 class ClusterRequest(BaseModel):
@@ -30,8 +47,31 @@ class ClusterRequest(BaseModel):
     result_path: str | None = None
     batch_size: int = 16
     workers: int = 8
-    cluster_similarity_threshold: float = 0.88
+    cluster_similarity_threshold: float = 0.97
     limit: int | None = None
+
+
+class CacheClearRequest(BaseModel):
+    output_dir: str = str(OUTPUT_DIR)
+
+
+class VlmModelsRequest(BaseModel):
+    endpoint: str
+    api_key: str = ""
+
+
+class VlmPickRequest(BaseModel):
+    result_path: str
+    endpoint: str
+    model: str
+    prompt: str
+    api_key: str = ""
+    only_unpicked: bool = True
+    overwrite_existing: bool = False
+
+
+class VlmClearRequest(BaseModel):
+    result_path: str
 
 
 def utc_now() -> str:
@@ -56,6 +96,37 @@ def update_job(job_id: str, **changes: Any) -> None:
 def is_job_cancelled(job_id: str) -> bool:
     with jobs_lock:
         job = jobs.get(job_id)
+        if job is None:
+            return True
+        return bool(job.get("cancel_requested", False))
+
+
+def has_active_jobs() -> bool:
+    with jobs_lock:
+        has_cluster_jobs = any(job["status"] in {"running", "cancelling"} for job in jobs.values())
+    with vlm_jobs_lock:
+        has_vlm_jobs = any(job["status"] in {"running", "cancelling"} for job in vlm_jobs.values())
+    return has_cluster_jobs or has_vlm_jobs
+
+
+def get_vlm_job(job_id: str) -> dict[str, Any]:
+    with vlm_jobs_lock:
+        job = vlm_jobs.get(job_id)
+        if job is None:
+            raise HTTPException(status_code=404, detail="VLM job not found")
+        return dict(job)
+
+
+def update_vlm_job(job_id: str, **changes: Any) -> None:
+    with vlm_jobs_lock:
+        if job_id not in vlm_jobs:
+            return
+        vlm_jobs[job_id].update(changes)
+
+
+def is_vlm_job_cancelled(job_id: str) -> bool:
+    with vlm_jobs_lock:
+        job = vlm_jobs.get(job_id)
         if job is None:
             return True
         return bool(job.get("cancel_requested", False))
@@ -183,12 +254,171 @@ def defaults() -> dict[str, Any]:
     return {
         "output_dir": str(OUTPUT_DIR),
         "browse_root": str(browse_root.resolve()),
+        "vlm_endpoint": API_BASE_URL,
+        "vlm_prompt": DEFAULT_VLM_PICK_PROMPT,
     }
 
 
 @app.post("/api/pick-directory")
 def pick_directory() -> dict[str, str]:
     return {"path": pick_directory_with_system_dialog()}
+
+
+@app.post("/api/cache/embedding/clear")
+def clear_embedding_cache_endpoint(request: CacheClearRequest) -> dict[str, Any]:
+    if has_active_jobs():
+        raise HTTPException(status_code=409, detail="Cannot clear embedding cache while a job is running")
+
+    output_dir = normalize_directory(request.output_dir)
+    cache_dir, removed_files = clear_embedding_cache(output_dir)
+    return {
+        "output_dir": str(output_dir),
+        "cache_dir": str(cache_dir),
+        "removed_files": removed_files,
+    }
+
+
+@app.get("/api/cache/embedding/status")
+def embedding_cache_status(output_dir: str = Query(default=str(OUTPUT_DIR))) -> dict[str, Any]:
+    resolved_output_dir = normalize_directory(output_dir)
+    return {
+        "output_dir": str(resolved_output_dir),
+        **get_embedding_cache_status(resolved_output_dir),
+    }
+
+
+@app.post("/api/vlm/models")
+def vlm_models(request: VlmModelsRequest) -> dict[str, Any]:
+    try:
+        models = fetch_model_ids(request.endpoint, api_key=request.api_key)
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return {
+        "endpoint": request.endpoint,
+        "models": models,
+    }
+
+
+@app.post("/api/vlm/picks/clear")
+def clear_vlm_picks(request: VlmClearRequest) -> dict[str, Any]:
+    if has_active_jobs():
+        raise HTTPException(status_code=409, detail="Cannot clear VLM picks while a job is running")
+
+    result_path = Path(request.result_path).expanduser().resolve()
+    if not result_path.exists() or not result_path.is_file():
+        raise HTTPException(status_code=400, detail=f"Result JSON does not exist: {result_path}")
+
+    try:
+        return clear_vlm_pick_results(result_path)
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.post("/api/vlm/pick/stream")
+def vlm_pick_stream(request: VlmPickRequest) -> StreamingResponse:
+    result_path = Path(request.result_path).expanduser().resolve()
+    if not result_path.exists() or not result_path.is_file():
+        raise HTTPException(status_code=400, detail=f"Result JSON does not exist: {result_path}")
+    if not request.endpoint.strip():
+        raise HTTPException(status_code=400, detail="endpoint is required")
+    if not request.model.strip():
+        raise HTTPException(status_code=400, detail="model is required")
+    if not request.prompt.strip():
+        raise HTTPException(status_code=400, detail="prompt is required")
+
+    vlm_job_id = uuid4().hex
+    with vlm_jobs_lock:
+        vlm_jobs[vlm_job_id] = {
+            "job_id": vlm_job_id,
+            "status": "running",
+            "message": "VLM 挑图任务已创建，等待开始",
+            "result_path": str(result_path),
+            "cancel_requested": False,
+            "created_at": utc_now(),
+            "finished_at": None,
+            "error": None,
+        }
+
+    def stream() -> Any:
+        event_queue: queue.Queue[dict[str, Any] | None] = queue.Queue()
+
+        def emit(event: dict[str, Any]) -> None:
+            event_queue.put(event)
+
+        def worker() -> None:
+            try:
+                update_vlm_job(vlm_job_id, message="VLM 挑图进行中")
+                run_vlm_pick(
+                    result_path=result_path,
+                    endpoint=request.endpoint,
+                    model=request.model,
+                    prompt=request.prompt,
+                    api_key=request.api_key,
+                    only_unpicked=request.only_unpicked,
+                    overwrite_existing=request.overwrite_existing,
+                    event_callback=emit,
+                    cancel_check=lambda: is_vlm_job_cancelled(vlm_job_id),
+                )
+                update_vlm_job(
+                    vlm_job_id,
+                    status="done",
+                    message="VLM 挑图完成",
+                    finished_at=utc_now(),
+                )
+            except VlmPickCancelledError:
+                update_vlm_job(
+                    vlm_job_id,
+                    status="cancelled",
+                    message="VLM 挑图已取消",
+                    finished_at=utc_now(),
+                )
+                event_queue.put({"type": "cancelled", "job_id": vlm_job_id, "message": "VLM 挑图已取消"})
+            except Exception as exc:
+                update_vlm_job(
+                    vlm_job_id,
+                    status="error",
+                    message=str(exc),
+                    error=str(exc),
+                    finished_at=utc_now(),
+                )
+                event_queue.put({"type": "error", "message": str(exc)})
+            finally:
+                event_queue.put(None)
+
+        thread = threading.Thread(target=worker, daemon=True)
+        thread.start()
+
+        yield f"data: {json.dumps({'type': 'start', 'job_id': vlm_job_id, 'result_path': str(result_path)}, ensure_ascii=False)}\n\n"
+
+        while True:
+            event = event_queue.get()
+            if event is None:
+                break
+            yield f"data: {json.dumps(event, ensure_ascii=False)}\n\n"
+
+            if event.get("type") in {"done", "error", "cancelled"}:
+                break
+
+    return StreamingResponse(stream(), media_type="text/event-stream")
+
+
+@app.get("/api/vlm/jobs/{job_id}")
+def read_vlm_job(job_id: str) -> dict[str, Any]:
+    return get_vlm_job(job_id)
+
+
+@app.post("/api/vlm/jobs/{job_id}/cancel")
+def cancel_vlm_job(job_id: str) -> dict[str, str]:
+    with vlm_jobs_lock:
+        job = vlm_jobs.get(job_id)
+        if job is None:
+            raise HTTPException(status_code=404, detail="VLM job not found")
+        if job["status"] in {"done", "error", "cancelled"}:
+            return {"status": job["status"]}
+        job["cancel_requested"] = True
+        job["status"] = "cancelling"
+        job["message"] = "正在取消 VLM 挑图，等待当前响应片段结束"
+    return {"status": "cancelling"}
 
 
 @app.get("/api/browse")

@@ -6,258 +6,815 @@
   <title>Photo Maker Cluster</title>
   <style>
     :root {
-      --bg: #f2ede3;
-      --panel: rgba(255, 252, 247, 0.78);
-      --panel-strong: rgba(255, 248, 237, 0.96);
-      --line: rgba(68, 54, 40, 0.12);
-      --ink: #231b14;
-      --muted: #746557;
-      --shadow: 0 22px 60px rgba(66, 49, 26, 0.14);
-      --radius: 24px;
+      --bg: #efe9de;
+      --panel: rgba(255, 252, 247, 0.92);
+      --panel-strong: rgba(255, 249, 241, 0.98);
+      --line: rgba(77, 59, 43, 0.12);
+      --ink: #221913;
+      --muted: #6f6256;
+      --accent: #aa4f30;
+      --accent-dark: #6a2a16;
+      --shadow: 0 18px 46px rgba(63, 47, 30, 0.12);
       --mono: "SF Mono", "JetBrains Mono", "Cascadia Code", monospace;
-      --serif: "Iowan Old Style", "Palatino Linotype", "Book Antiqua", Palatino, serif;
+      --sans: "Avenir Next", "Segoe UI", sans-serif;
     }
 
     * { box-sizing: border-box; }
+
     body {
       margin: 0;
       min-height: 100vh;
-      font-family: var(--serif);
       color: var(--ink);
+      font-family: var(--sans);
       background:
-        radial-gradient(circle at top left, rgba(255, 221, 180, 0.7), transparent 28%),
-        radial-gradient(circle at top right, rgba(214, 107, 70, 0.22), transparent 22%),
-        linear-gradient(135deg, #efe6d7 0%, #f7f3eb 36%, #e7dccf 100%);
+        radial-gradient(circle at top left, rgba(255, 218, 181, 0.65), transparent 24%),
+        radial-gradient(circle at top right, rgba(183, 97, 58, 0.16), transparent 24%),
+        linear-gradient(180deg, #f5efe6 0%, #eee5d8 100%);
     }
 
-    .shell {
-      width: min(1360px, calc(100vw - 32px));
-      margin: 24px auto;
+    .app-shell {
+      width: min(100vw - 24px, 1760px);
+      margin: 12px auto;
       display: grid;
-      grid-template-columns: 380px minmax(0, 1fr);
-      gap: 20px;
+      grid-template-columns: minmax(300px, 360px) minmax(0, 1fr);
+      gap: 16px;
+      align-items: start;
     }
 
     .panel {
-      backdrop-filter: blur(18px);
       background: var(--panel);
       border: 1px solid var(--line);
-      border-radius: var(--radius);
       box-shadow: var(--shadow);
+      backdrop-filter: blur(14px);
     }
 
-    .sidebar, .main {
-      padding: 24px;
-      display: flex;
-      flex-direction: column;
-      gap: 18px;
+    .sidebar {
+      position: sticky;
+      top: 12px;
+      padding: 18px;
+      display: grid;
+      gap: 14px;
+    }
+
+    .main {
+      padding: 16px;
+      display: grid;
+      gap: 14px;
     }
 
     .hero {
-      padding: 26px;
-      background: linear-gradient(160deg, rgba(190, 79, 47, 0.96), rgba(84, 38, 26, 0.92));
-      color: #fff8f1;
-      border-radius: 26px;
-      position: relative;
+      padding: 22px;
+      background: linear-gradient(160deg, #bb5b39 0%, #7d2f1b 100%);
+      color: #fff9f4;
       overflow: hidden;
+      position: relative;
     }
 
     .hero::after {
       content: "";
       position: absolute;
-      inset: auto -40px -60px auto;
-      width: 180px;
-      height: 180px;
-      border-radius: 999px;
-      background: radial-gradient(circle, rgba(255, 214, 181, 0.42), transparent 68%);
+      right: -28px;
+      bottom: -36px;
+      width: 160px;
+      height: 160px;
+      background: radial-gradient(circle, rgba(255, 221, 190, 0.3), transparent 70%);
     }
 
     .eyebrow {
       font-family: var(--mono);
-      font-size: 12px;
+      font-size: 11px;
       letter-spacing: 0.18em;
       text-transform: uppercase;
-      opacity: 0.76;
+      opacity: 0.74;
     }
 
-    h1, h2, h3 { margin: 0; font-weight: 600; }
-    h1 { margin-top: 12px; font-size: clamp(28px, 4vw, 42px); line-height: 1.02; }
-    .muted { margin: 0; color: var(--muted); }
-    .hero p { margin: 12px 0 0; color: rgba(255, 245, 233, 0.86); font-size: 15px; line-height: 1.6; }
+    h1, h2, h3, p { margin: 0; }
+    h1 { margin-top: 8px; font-size: clamp(28px, 3vw, 38px); line-height: 1.02; }
+    h2 { font-size: clamp(22px, 2vw, 28px); }
+    h3 { font-size: 17px; }
 
-    .block {
-      padding: 20px;
-      border-radius: 22px;
+    .hero p {
+      margin-top: 10px;
+      line-height: 1.55;
+      color: rgba(255, 246, 237, 0.88);
+      max-width: 32ch;
+    }
+
+    .section {
+      padding: 18px;
       background: var(--panel-strong);
-      border: 1px solid var(--line);
-      display: flex;
-      flex-direction: column;
+      display: grid;
       gap: 12px;
     }
 
-    label { font-size: 14px; font-weight: 600; }
+    label {
+      font-size: 13px;
+      font-weight: 700;
+      color: var(--muted);
+    }
 
     input {
       width: 100%;
-      border: 1px solid rgba(80, 61, 45, 0.16);
-      border-radius: 16px;
-      padding: 14px 16px;
-      background: rgba(255, 255, 255, 0.88);
+      min-width: 0;
+      border: 1px solid rgba(88, 67, 48, 0.14);
+      background: rgba(255, 255, 255, 0.86);
       color: var(--ink);
+      padding: 13px 14px;
       font-size: 14px;
       font-family: var(--mono);
     }
 
-    .button-row {
+    .control-grid {
       display: grid;
-      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 12px;
+    }
+
+    .button-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
       gap: 10px;
     }
 
     button {
       border: none;
-      border-radius: 999px;
-      padding: 14px 18px;
+      padding: 13px 16px;
       cursor: pointer;
       font-size: 14px;
       font-weight: 700;
-      transition: transform 180ms ease, box-shadow 180ms ease, opacity 180ms ease;
+      transition: transform 160ms ease, box-shadow 160ms ease, opacity 160ms ease;
     }
 
-    button:hover { transform: translateY(-1px); box-shadow: 0 16px 24px rgba(70, 42, 25, 0.18); }
-    button:disabled { opacity: 0.56; cursor: not-allowed; transform: none; box-shadow: none; }
-    .primary { background: linear-gradient(135deg, #c75835, #8f311a); color: #fff8ef; }
-    .secondary { background: #efe2d0; color: #513828; }
-    .danger { background: linear-gradient(135deg, #514238, #231812); color: #fff4ed; }
+    button:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 12px 20px rgba(74, 49, 27, 0.14);
+    }
+
+    button:disabled {
+      opacity: 0.58;
+      cursor: not-allowed;
+      transform: none;
+      box-shadow: none;
+    }
+
+    .primary {
+      background: linear-gradient(135deg, var(--accent), var(--accent-dark));
+      color: #fff7f1;
+    }
+
+    .secondary {
+      background: #efe1d0;
+      color: #4f3828;
+    }
+
+    .danger {
+      background: linear-gradient(135deg, #514238, #231812);
+      color: #fff4ed;
+    }
+
+    .filter-box {
+      padding: 14px;
+      border: 1px solid rgba(77, 59, 43, 0.08);
+      background: rgba(255, 250, 244, 0.88);
+      display: grid;
+      gap: 10px;
+    }
+
+    .filter-header,
+    .summary-header,
+    .status-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+
+    .slider {
+      width: 100%;
+      margin: 0;
+      padding: 0;
+      border: none;
+      background: transparent;
+    }
+
+    .chip-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+
+    .chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 7px 10px;
+      background: rgba(170, 79, 48, 0.08);
+      color: #7d3b25;
+      font-family: var(--mono);
+      font-size: 12px;
+    }
+
+    .path-text,
+    .meta-text,
+    .mono {
+      font-family: var(--mono);
+      font-size: 12px;
+      line-height: 1.45;
+      color: var(--muted);
+      word-break: break-all;
+    }
 
     .status-card {
-      padding: 22px;
-      border-radius: 24px;
-      background: linear-gradient(180deg, rgba(255, 255, 255, 0.72), rgba(248, 241, 231, 0.96));
-      border: 1px solid var(--line);
+      padding: 18px;
       display: grid;
-      gap: 14px;
+      gap: 12px;
+      background: linear-gradient(180deg, rgba(255, 255, 255, 0.78), rgba(247, 239, 227, 0.96));
     }
 
     .progress-track {
-      height: 14px;
+      height: 10px;
       background: rgba(78, 55, 35, 0.08);
-      border-radius: 999px;
       overflow: hidden;
     }
 
     .progress-fill {
       height: 100%;
       width: 0%;
-      background: linear-gradient(90deg, #bf4f2f 0%, #e8b577 100%);
-      border-radius: 999px;
-      transition: width 280ms ease;
+      background: linear-gradient(90deg, #bc5432 0%, #e6b06f 100%);
+      transition: width 220ms ease;
     }
 
-    .stats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
-    .stat { padding: 16px; border-radius: 18px; background: rgba(255, 250, 244, 0.92); border: 1px solid rgba(79, 57, 35, 0.08); }
-    .stat strong { display: block; font-size: 26px; line-height: 1.1; margin-top: 6px; }
-    .chip-row { display: flex; flex-wrap: wrap; gap: 8px; }
-    .chip { display: inline-flex; align-items: center; gap: 6px; padding: 8px 12px; border-radius: 999px; background: rgba(191, 79, 47, 0.08); color: #7a351f; font-size: 12px; font-family: var(--mono); }
-    .results { display: grid; gap: 18px; }
-    .cluster-card { padding: 18px; border-radius: 22px; background: rgba(255, 252, 247, 0.92); border: 1px solid var(--line); display: grid; gap: 14px; }
-    .filter-bar { display: grid; gap: 10px; padding: 16px 18px; border-radius: 20px; background: rgba(255, 250, 244, 0.9); border: 1px solid rgba(79, 57, 35, 0.08); }
-    .filter-header { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
-    .slider-wrap { display: grid; gap: 8px; }
-    .slider { width: 100%; padding: 0; border: none; background: transparent; }
-    .slider-hint { font-size: 12px; color: var(--muted); font-family: var(--mono); }
-    .thumb-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(168px, 1fr)); gap: 14px; }
-    .thumb { display: grid; gap: 8px; }
-    .thumb img { width: 100%; aspect-ratio: 1 / 1; object-fit: cover; border-radius: 18px; border: 1px solid rgba(67, 53, 42, 0.12); background: #efe8dc; }
-    .thumb .caption, .path-text { font-family: var(--mono); font-size: 12px; color: var(--muted); word-break: break-all; }
-    .empty { padding: 28px; border-radius: 22px; border: 1px dashed rgba(92, 70, 51, 0.22); color: var(--muted); text-align: center; background: rgba(255, 250, 244, 0.68); }
-
-    @media (max-width: 1080px) {
-      .shell { grid-template-columns: 1fr; }
-      .stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 10px;
     }
 
-    @media (max-width: 720px) {
-      .shell { width: min(100vw - 18px, 100%); margin: 10px auto; }
-      .sidebar, .main { padding: 16px; }
-      .stats, .button-row { grid-template-columns: 1fr; }
+    .stat-card {
+      min-width: 0;
+      padding: 16px;
+      background: rgba(255, 251, 246, 0.94);
+      border: 1px solid rgba(79, 57, 35, 0.08);
+    }
+
+    .stat-card strong {
+      display: block;
+      margin-top: 6px;
+      font-size: clamp(22px, 2vw, 30px);
+      line-height: 1.08;
+    }
+
+    .summary-card,
+    .results-card,
+    .cluster-section {
+      padding: 18px;
+      background: rgba(255, 252, 247, 0.94);
+      border: 1px solid rgba(79, 57, 35, 0.08);
+    }
+
+    .summary-grid {
+      display: grid;
+      grid-template-columns: 1.1fr minmax(0, 1fr);
+      gap: 12px;
+    }
+
+    .detail-box {
+      padding: 14px;
+      background: rgba(252, 246, 239, 0.86);
+      border: 1px solid rgba(79, 57, 35, 0.08);
+      display: grid;
+      gap: 8px;
+    }
+
+    .results-card {
+      display: grid;
+      gap: 18px;
+    }
+
+    .cluster-list {
+      display: grid;
+      gap: 16px;
+    }
+
+    .cluster-section {
+      display: grid;
+      gap: 12px;
+    }
+
+    .photo-wall {
+      column-width: 220px;
+      column-gap: 6px;
+    }
+
+    .photo-tile {
+      position: relative;
+      display: block;
+      width: 100%;
+      margin: 0 0 6px;
+      break-inside: avoid;
+      background: #d8d3cb;
+      color: inherit;
+      text-decoration: none;
+      overflow: hidden;
+    }
+
+    .photo-tile.selected {
+      outline: 3px solid rgba(170, 79, 48, 0.92);
+      outline-offset: -3px;
+    }
+
+    .photo-id-badge {
+      position: absolute;
+      top: 8px;
+      left: 8px;
+      z-index: 2;
+      padding: 4px 8px;
+      background: rgba(0, 0, 0, 0.72);
+      color: #fff;
+      font-family: var(--mono);
+      font-size: 11px;
+      line-height: 1;
+    }
+
+    .photo-tile img {
+      display: block;
+      width: 100%;
+      height: auto;
+      border-radius: 0;
+      background: #d8d3cb;
+    }
+
+    .photo-overlay {
+      position: absolute;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      padding: 10px 12px;
+      background: linear-gradient(180deg, rgba(0, 0, 0, 0), rgba(0, 0, 0, 0.66));
+      color: rgba(255, 255, 255, 0.96);
+      display: grid;
+      gap: 2px;
+      opacity: 0;
+      transition: opacity 160ms ease;
+      pointer-events: none;
+    }
+
+    .photo-tile:hover .photo-overlay,
+    .photo-tile:focus-visible .photo-overlay {
+      opacity: 1;
+    }
+
+    .file-name {
+      font-size: 12px;
+      font-weight: 700;
+      line-height: 1.3;
+      word-break: break-all;
+    }
+
+    .file-path {
+      font-family: var(--mono);
+      font-size: 11px;
+      line-height: 1.35;
+      color: rgba(255, 255, 255, 0.78);
+      word-break: break-all;
+    }
+
+    .empty {
+      padding: 28px;
+      border: 1px dashed rgba(92, 70, 51, 0.22);
+      background: rgba(255, 250, 244, 0.72);
+      color: var(--muted);
+      text-align: center;
+    }
+
+    .vlm-shell {
+      display: grid;
+      grid-template-columns: minmax(320px, 420px) minmax(0, 1fr);
+      gap: 12px;
+      padding: 12px;
+      background: rgba(243, 236, 227, 0.96);
+      border: 1px solid rgba(77, 59, 43, 0.14);
+      box-shadow: 0 24px 60px rgba(32, 21, 14, 0.22);
+    }
+
+    .vlm-left,
+    .vlm-right {
+      background: rgba(255, 250, 244, 0.96);
+      border: 1px solid rgba(79, 57, 35, 0.08);
+      padding: 16px;
+      display: grid;
+      gap: 12px;
+      min-width: 0;
+    }
+
+    .vlm-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+
+    textarea,
+    select {
+      width: 100%;
+      min-width: 0;
+      border: 1px solid rgba(88, 67, 48, 0.14);
+      background: rgba(255, 255, 255, 0.86);
+      color: var(--ink);
+      padding: 13px 14px;
+      font-size: 14px;
+      font-family: var(--mono);
+    }
+
+    textarea {
+      resize: vertical;
+      min-height: 210px;
+      line-height: 1.5;
+    }
+
+    .inline-grid {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 10px;
+      align-items: end;
+    }
+
+    .vlm-actions {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 10px;
+    }
+
+    .checkbox-grid {
+      display: grid;
+      gap: 8px;
+    }
+
+    .checkbox-row {
+      display: flex;
+      align-items: flex-start;
+      gap: 8px;
+      font-size: 13px;
+      color: var(--muted);
+    }
+
+    .checkbox-row input {
+      width: auto;
+      margin: 2px 0 0;
+      padding: 0;
+    }
+
+    .vlm-log-list {
+      display: grid;
+      gap: 10px;
+      align-content: start;
+      max-height: 72vh;
+      overflow: auto;
+      padding-right: 4px;
+    }
+
+    .vlm-log-card {
+      border: 1px solid rgba(79, 57, 35, 0.08);
+      background: rgba(252, 246, 239, 0.88);
+      padding: 12px;
+      display: grid;
+      gap: 8px;
+    }
+
+    .vlm-log-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .vlm-log-output {
+      white-space: pre-wrap;
+      font-family: var(--mono);
+      font-size: 12px;
+      line-height: 1.5;
+      color: #3b2a1f;
+      background: rgba(255, 255, 255, 0.72);
+      border: 1px solid rgba(79, 57, 35, 0.08);
+      padding: 10px;
+      min-height: 72px;
+    }
+
+    .thinking-token {
+      color: #8a6951;
+      font-style: italic;
+    }
+
+    .answer-token {
+      color: #281c14;
+    }
+
+    .picked-summary {
+      font-family: var(--mono);
+      font-size: 12px;
+      color: var(--muted);
+    }
+
+    .picked-photo-card {
+      display: grid;
+      grid-template-columns: minmax(220px, 340px) minmax(0, 1fr);
+      gap: 12px;
+      padding: 12px;
+      background: rgba(251, 244, 235, 0.95);
+      border: 1px solid rgba(170, 79, 48, 0.16);
+    }
+
+    .picked-photo-card a {
+      display: block;
+      background: #d8d3cb;
+      color: inherit;
+      text-decoration: none;
+    }
+
+    .picked-photo-card img {
+      display: block;
+      width: 100%;
+      height: auto;
+    }
+
+    .picked-photo-meta {
+      display: grid;
+      align-content: start;
+      gap: 8px;
+      min-width: 0;
+    }
+
+    .picked-photo-title {
+      font-size: 14px;
+      font-weight: 700;
+      color: var(--accent-dark);
+    }
+
+    .picked-photo-note {
+      font-size: 13px;
+      line-height: 1.55;
+      color: #5a4636;
+    }
+
+    .model-compare-box {
+      display: grid;
+      gap: 8px;
+      padding: 12px;
+      background: rgba(248, 240, 230, 0.88);
+      border: 1px solid rgba(79, 57, 35, 0.08);
+    }
+
+    .selection-badge-stack {
+      position: absolute;
+      top: 8px;
+      right: 8px;
+      z-index: 2;
+      display: grid;
+      gap: 4px;
+      justify-items: end;
+    }
+
+    .selection-badge {
+      max-width: 140px;
+      padding: 4px 7px;
+      background: rgba(170, 79, 48, 0.92);
+      color: #fff8f1;
+      font-family: var(--mono);
+      font-size: 10px;
+      line-height: 1.2;
+      text-align: right;
+      word-break: break-word;
+    }
+
+    @media (max-width: 1320px) {
+      .stats-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .summary-grid { grid-template-columns: 1fr; }
+    }
+
+    @media (max-width: 1100px) {
+      .app-shell { grid-template-columns: 1fr; }
+      .sidebar { position: static; }
+    }
+
+    @media (max-width: 760px) {
+      .app-shell {
+        width: min(100vw - 12px, 100%);
+        margin: 6px auto;
+        gap: 8px;
+      }
+
+      .sidebar,
+      .main,
+      .section,
+      .status-card,
+      .summary-card,
+      .results-card,
+      .cluster-section {
+        padding: 14px;
+      }
+
+      .button-grid,
+      .stats-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .photo-wall { column-width: 150px; }
+    }
+
+    @media (max-width: 980px) {
+      .vlm-shell {
+        grid-template-columns: 1fr;
+      }
+
+      .vlm-actions {
+        grid-template-columns: 1fr;
+      }
+
+      .picked-photo-card {
+        grid-template-columns: 1fr;
+      }
     }
   </style>
 </head>
 <body>
-  <div class="shell">
+  <div class="app-shell">
     <aside class="panel sidebar">
       <section class="hero">
         <div class="eyebrow">Photo Maker</div>
         <h1>照片聚类工作台</h1>
-        <p>使用 macOS 系统原生目录选择器，后台并行准备图片缓存，并支持处理中途取消。</p>
+        <p>目录选择、缓存管理、聚类处理和图片浏览都集中在同一页，结果区改成可平铺自动排列的照片墙。</p>
       </section>
 
-      <section class="block">
-        <label for="inputDir">照片目录</label>
-        <input id="inputDir" type="text" placeholder="点击“选择目录”调用系统对话框" readonly />
+      <section class="section">
+        <div class="control-grid">
+          <label for="inputDir">照片目录</label>
+          <input id="inputDir" type="text" placeholder="点击“选择目录”调用系统对话框" readonly />
 
-        <label for="outputDir">JPG 缓存目录</label>
-        <input id="outputDir" type="text" />
+          <label for="outputDir">JPG / Embedding 缓存目录</label>
+          <input id="outputDir" type="text" />
 
-        <label for="workers">并行线程数</label>
-        <input id="workers" type="number" min="1" value="8" />
+          <label for="workers">并行线程数</label>
+          <input id="workers" type="number" min="1" value="8" />
 
-        <label for="limit">处理上限</label>
-        <input id="limit" type="number" min="1" placeholder="为空表示整目录" />
-
-        <div class="filter-bar">
-          <div class="filter-header">
-            <strong>聚类相似度</strong>
-            <span id="similarityValue" class="chip">0.880</span>
-          </div>
-          <div class="slider-wrap">
-            <input id="similaritySlider" class="slider" type="range" min="0.500" max="0.990" step="0.005" value="0.880" />
-            <div id="similarityHint" class="slider-hint">越高越严格，越容易拆成更多 cluster</div>
-          </div>
+          <label for="limit">处理上限</label>
+          <input id="limit" type="number" min="1" placeholder="为空表示整目录" />
         </div>
 
-        <div class="button-row">
+        <div class="filter-box">
+          <div class="filter-header">
+            <strong>聚类相似度</strong>
+            <span id="similarityValue" class="chip">0.970</span>
+          </div>
+          <input id="similaritySlider" class="slider" type="range" min="0.500" max="0.990" step="0.005" value="0.970" />
+          <div id="similarityHint" class="meta-text">越高越严格，越容易拆成更多 cluster</div>
+        </div>
+
+        <div class="button-grid">
           <button id="pickButton" class="secondary" type="button">选择目录</button>
           <button id="startButton" class="primary" type="button">开始聚类</button>
           <button id="cancelButton" class="danger" type="button" disabled>取消</button>
+          <button id="clearCacheButton" class="secondary" type="button">清空 Embedding 缓存</button>
         </div>
       </section>
 
-      <section class="block">
+      <section class="section">
         <h3>当前目录</h3>
         <div id="selectedPath" class="path-text">尚未选择目录</div>
-        <p class="muted">取消请求会在当前并行批次结束后尽快停止。</p>
+        <p class="meta-text">取消请求会在当前批次结束后尽快停止。缓存统计会根据当前输出目录自动刷新。</p>
+      </section>
+
+      <section class="section">
+        <div class="summary-header">
+          <h3>Embedding 缓存</h3>
+          <span id="cacheStateChip" class="chip">0 files</span>
+        </div>
+        <div class="detail-box">
+          <div><strong id="cacheFileCount">0</strong> 个文件</div>
+          <div><strong id="cacheSizeText">0 B</strong> 总大小</div>
+          <div id="cacheDirText" class="path-text">-</div>
+        </div>
       </section>
     </aside>
 
     <main class="panel main">
       <section class="status-card">
-        <div style="display:flex; justify-content:space-between; align-items:end; gap:16px; flex-wrap:wrap;">
+        <div class="status-header">
           <div>
             <div class="eyebrow" style="color: var(--muted);">Job Status</div>
             <h2 id="statusTitle">等待开始</h2>
           </div>
           <div id="statusMeta" class="chip-row"></div>
         </div>
-
         <div class="progress-track">
           <div id="progressFill" class="progress-fill"></div>
         </div>
-
-        <div id="statusMessage" class="muted">页面就绪。</div>
+        <div id="statusMessage" class="meta-text">页面就绪。</div>
       </section>
 
-      <section class="stats">
-        <div class="stat"><div class="eyebrow" style="color: var(--muted);">Photos</div><strong id="statPhotos">0</strong></div>
-        <div class="stat"><div class="eyebrow" style="color: var(--muted);">Clusters</div><strong id="statClusters">0</strong></div>
-        <div class="stat"><div class="eyebrow" style="color: var(--muted);">Result JSON</div><strong id="statResult" style="font-size:14px; line-height:1.45; word-break:break-all;">-</strong></div>
+      <section class="stats-grid">
+        <article class="stat-card">
+          <div class="eyebrow" style="color: var(--muted);">Photos</div>
+          <strong id="statPhotos">0</strong>
+        </article>
+        <article class="stat-card">
+          <div class="eyebrow" style="color: var(--muted);">Clusters</div>
+          <strong id="statClusters">0</strong>
+        </article>
+        <article class="stat-card">
+          <div class="eyebrow" style="color: var(--muted);">Cache Files</div>
+          <strong id="statCacheFiles">0</strong>
+        </article>
+        <article class="stat-card">
+          <div class="eyebrow" style="color: var(--muted);">Cache Size</div>
+          <strong id="statCacheSize">0 B</strong>
+        </article>
       </section>
 
-      <section class="results">
+      <section class="summary-card">
+        <div class="summary-header">
+          <h3>结果摘要</h3>
+          <span class="chip">点击任意图片会在新页面打开大图</span>
+        </div>
+        <div class="summary-grid">
+          <div class="detail-box">
+            <label>结果 JSON</label>
+            <div id="statResult" class="path-text">-</div>
+          </div>
+          <div class="detail-box">
+            <label>说明</label>
+            <div class="meta-text">结果区改成平铺式照片墙，不再给图片加圆角。浏览器缩放或窗口变窄时，布局会自动改成更紧凑的列数。</div>
+          </div>
+        </div>
+      </section>
+
+      <section class="summary-card">
+        <div class="summary-header">
+          <div>
+            <div class="eyebrow" style="color: var(--muted);">VLM Pick</div>
+            <h3>同页挑图</h3>
+          </div>
+          <span id="vlmDialogStatusChip" class="chip">idle</span>
+        </div>
+
+        <div class="vlm-shell">
+          <section class="vlm-left">
+            <div class="control-grid">
+              <label for="vlmEndpointInput">Endpoint</label>
+              <input id="vlmEndpointInput" type="text" placeholder="例如 http://127.0.0.1:1234/v1" />
+
+              <label for="vlmApiKeyInput">API Key</label>
+              <input id="vlmApiKeyInput" type="password" placeholder="可选" />
+
+              <div class="inline-grid">
+                <div>
+                  <label for="vlmModelSelect">模型</label>
+                  <select id="vlmModelSelect"></select>
+                </div>
+                <button id="refreshVlmModelsButton" class="secondary" type="button">拉取模型</button>
+              </div>
+
+              <label for="vlmPromptInput">Prompt</label>
+              <textarea id="vlmPromptInput"></textarea>
+            </div>
+
+            <div class="detail-box">
+              <div class="meta-text">VLM 配置不再单独弹窗，而是固定放在主页面。每个 cluster 的图片编号严格按 image_id 从 0 开始，模型最后需要返回 `{"select": N}`。</div>
+              <div id="vlmResultPathText" class="path-text">尚无可用的 result JSON</div>
+              <div id="vlmClusterCountChip" class="chip">0 clusters</div>
+            </div>
+
+            <div class="checkbox-grid">
+              <label class="checkbox-row"><input id="vlmOnlyUnpickedCheckbox" type="checkbox" checked />只处理还没有 VLM 结果的 cluster</label>
+              <label class="checkbox-row"><input id="vlmOverwriteCheckbox" type="checkbox" />重新挑图并覆盖已有结果</label>
+            </div>
+
+            <div class="vlm-actions">
+              <button id="startVlmPickButton" class="primary" type="button">开始 VLM 挑图</button>
+              <button id="cancelVlmPickButton" class="danger" type="button" disabled>取消 VLM 挑图</button>
+              <button id="clearVlmPicksButton" class="secondary" type="button">只清空 Pick 结果</button>
+            </div>
+          </section>
+
+          <section class="vlm-right">
+            <div class="vlm-header">
+              <div>
+                <div class="eyebrow" style="color: var(--muted);">Streaming</div>
+                <h3>实时输出</h3>
+              </div>
+            </div>
+            <div id="vlmLogList" class="vlm-log-list">
+              <div class="empty">先完成一次聚类，然后直接在本页启动 VLM 挑图，实时输出会显示在这里。</div>
+            </div>
+          </section>
+        </div>
+      </section>
+
+      <section class="results-card">
         <div>
           <h2>聚类结果</h2>
-          <p class="muted">滑杆控制聚类相似度，越高表示聚类越严格。每个 cluster 会展示缩略图、文件路径和平均相似度。</p>
+          <p class="meta-text">每个 cluster 会单独展示为一组平铺照片。如果已有 VLM 选择结果，会先单独显示选中的那一张，下面仍保留完整照片墙。image_id 从 0 开始。</p>
         </div>
         <div id="clustersContainer" class="empty">开始处理后，聚类结果会显示在这里。</div>
       </section>
@@ -265,7 +822,17 @@
   </div>
 
   <script>
-    const state = { jobId: null, pollingTimer: null, currentResult: null, clusterSimilarityThreshold: 0.88 };
+    const state = {
+      jobId: null,
+      pollingTimer: null,
+      currentResult: null,
+      clusterSimilarityThreshold: 0.97,
+      vlmDefaultsLoaded: false,
+      vlmRunning: false,
+      currentVlmJobId: null,
+      vlmAbortController: null,
+      vlmLogMap: new Map(),
+    };
 
     const inputDir = document.getElementById('inputDir');
     const outputDir = document.getElementById('outputDir');
@@ -274,6 +841,7 @@
     const pickButton = document.getElementById('pickButton');
     const startButton = document.getElementById('startButton');
     const cancelButton = document.getElementById('cancelButton');
+    const clearCacheButton = document.getElementById('clearCacheButton');
     const selectedPath = document.getElementById('selectedPath');
     const statusTitle = document.getElementById('statusTitle');
     const statusMessage = document.getElementById('statusMessage');
@@ -282,10 +850,30 @@
     const statPhotos = document.getElementById('statPhotos');
     const statClusters = document.getElementById('statClusters');
     const statResult = document.getElementById('statResult');
+    const statCacheFiles = document.getElementById('statCacheFiles');
+    const statCacheSize = document.getElementById('statCacheSize');
     const clustersContainer = document.getElementById('clustersContainer');
     const similaritySlider = document.getElementById('similaritySlider');
     const similarityValue = document.getElementById('similarityValue');
     const similarityHint = document.getElementById('similarityHint');
+    const cacheStateChip = document.getElementById('cacheStateChip');
+    const cacheFileCount = document.getElementById('cacheFileCount');
+    const cacheSizeText = document.getElementById('cacheSizeText');
+    const cacheDirText = document.getElementById('cacheDirText');
+    const vlmEndpointInput = document.getElementById('vlmEndpointInput');
+    const vlmApiKeyInput = document.getElementById('vlmApiKeyInput');
+    const vlmModelSelect = document.getElementById('vlmModelSelect');
+    const refreshVlmModelsButton = document.getElementById('refreshVlmModelsButton');
+    const vlmPromptInput = document.getElementById('vlmPromptInput');
+    const vlmOnlyUnpickedCheckbox = document.getElementById('vlmOnlyUnpickedCheckbox');
+    const vlmOverwriteCheckbox = document.getElementById('vlmOverwriteCheckbox');
+    const startVlmPickButton = document.getElementById('startVlmPickButton');
+    const cancelVlmPickButton = document.getElementById('cancelVlmPickButton');
+    const clearVlmPicksButton = document.getElementById('clearVlmPicksButton');
+    const vlmDialogStatusChip = document.getElementById('vlmDialogStatusChip');
+    const vlmClusterCountChip = document.getElementById('vlmClusterCountChip');
+    const vlmLogList = document.getElementById('vlmLogList');
+    const vlmResultPathText = document.getElementById('vlmResultPathText');
 
     async function requestJson(url, options) {
       const response = await fetch(url, options);
@@ -301,16 +889,119 @@
       return `/api/image?path=${encodeURIComponent(path)}`;
     }
 
+    function escapeHtml(value) {
+      return String(value)
+        .replaceAll('&', '&amp;')
+        .replaceAll('<', '&lt;')
+        .replaceAll('>', '&gt;')
+        .replaceAll('"', '&quot;')
+        .replaceAll("'", '&#39;');
+    }
+
+    function formatBytes(bytes) {
+      const value = Number(bytes) || 0;
+      if (value < 1024) return `${value} B`;
+      const units = ['KB', 'MB', 'GB', 'TB'];
+      let size = value / 1024;
+      let unitIndex = 0;
+      while (size >= 1024 && unitIndex < units.length - 1) {
+        size /= 1024;
+        unitIndex += 1;
+      }
+      return `${size.toFixed(size >= 100 ? 0 : size >= 10 ? 1 : 2)} ${units[unitIndex]}`;
+    }
+
+    function fileName(path) {
+      return String(path).split('/').filter(Boolean).pop() || path;
+    }
+
+    function truncateText(text, maxLength = 140) {
+      const normalized = String(text || '').trim();
+      if (normalized.length <= maxLength) return normalized;
+      return `${normalized.slice(0, maxLength)}...`;
+    }
+
+    function clusterSelectedId(cluster) {
+      if (!cluster || !cluster.vlm_pick) return null;
+      if (Number.isInteger(cluster.vlm_pick.select)) return cluster.vlm_pick.select;
+      if (Number.isInteger(cluster.vlm_pick.selected_image_id)) return cluster.vlm_pick.selected_image_id;
+      return null;
+    }
+
+    function getModelPickEntries(cluster) {
+      if (!cluster?.vlm_pick) return [];
+      const byModel = cluster.vlm_pick.by_model;
+      if (byModel && typeof byModel === 'object') {
+        return Object.entries(byModel)
+          .map(([modelKey, value]) => ({
+            modelKey,
+            label: value?.label || value?.model || modelKey,
+            select: Number.isInteger(value?.select) ? value.select : value?.selected_image_id,
+          }))
+          .filter(entry => Number.isInteger(entry.select))
+          .sort((left, right) => String(left.label).localeCompare(String(right.label), 'zh-CN'));
+      }
+
+      const legacySelect = clusterSelectedId(cluster);
+      if (legacySelect === null) return [];
+      return [{
+        modelKey: 'legacy',
+        label: cluster.vlm_pick.label || cluster.vlm_pick.model || 'legacy',
+        select: legacySelect,
+      }];
+    }
+
     function setStatus(title, message, percent, chips = []) {
       statusTitle.textContent = title;
       statusMessage.textContent = message;
       progressFill.style.width = `${Math.max(0, Math.min(100, percent))}%`;
-      statusMeta.innerHTML = chips.map(chip => `<span class="chip">${chip}</span>`).join('');
+      statusMeta.innerHTML = chips.map(chip => `<span class="chip">${escapeHtml(chip)}</span>`).join('');
     }
 
     function renderEmpty(element, text) {
       element.className = 'empty';
-      element.innerHTML = text;
+      element.innerHTML = escapeHtml(text);
+    }
+
+    function setVlmDialogStatus(text) {
+      vlmDialogStatusChip.textContent = text;
+    }
+
+    function resetVlmLogs(message) {
+      state.vlmLogMap = new Map();
+      vlmLogList.innerHTML = `<div class="empty">${escapeHtml(message)}</div>`;
+    }
+
+    function getResultPath() {
+      return state.currentResult?.result_path || statResult.textContent.trim() || '';
+    }
+
+    function updateVlmDialogContext() {
+      const resultPath = getResultPath();
+      vlmResultPathText.textContent = resultPath || '尚无可用的 result JSON';
+      const clusterCount = state.currentResult?.clusters?.length || 0;
+      vlmClusterCountChip.textContent = `${clusterCount} clusters`;
+    }
+
+    function findSelectedItem(cluster) {
+      const selectedId = clusterSelectedId(cluster);
+      if (selectedId === null || !Array.isArray(cluster?.items)) {
+        return null;
+      }
+      return cluster.items.find(item => item.image_id === selectedId) || null;
+    }
+
+    function selectionBadgesHtml(cluster, item) {
+      const badges = getModelPickEntries(cluster).filter(entry => entry.select === item.image_id);
+      if (!badges.length) {
+        return '';
+      }
+
+      return `
+        <span class="selection-badge-stack">
+          ${badges.map(entry => `<span class="selection-badge">${escapeHtml(entry.label)}: ${entry.select}</span>`).join('')}
+        </span>
+      `;
     }
 
     function setClusterSimilarityThreshold(value) {
@@ -320,68 +1011,424 @@
       similarityHint.textContent = `当前聚类相似度 ${state.clusterSimilarityThreshold.toFixed(3)}，越高越严格`;
     }
 
+    async function refreshCacheStatus() {
+      const targetOutputDir = outputDir.value.trim();
+      if (!targetOutputDir) {
+        cacheStateChip.textContent = '0 files';
+        cacheFileCount.textContent = '0';
+        cacheSizeText.textContent = '0 B';
+        cacheDirText.textContent = '-';
+        statCacheFiles.textContent = '0';
+        statCacheSize.textContent = '0 B';
+        return;
+      }
+
+      try {
+        const result = await requestJson(`/api/cache/embedding/status?output_dir=${encodeURIComponent(targetOutputDir)}`);
+        cacheStateChip.textContent = `${result.file_count} files`;
+        cacheFileCount.textContent = String(result.file_count);
+        cacheSizeText.textContent = formatBytes(result.total_bytes);
+        cacheDirText.textContent = result.cache_dir;
+        statCacheFiles.textContent = String(result.file_count);
+        statCacheSize.textContent = formatBytes(result.total_bytes);
+      } catch (error) {
+        cacheStateChip.textContent = 'status error';
+        cacheDirText.textContent = String(error);
+      }
+    }
+
+    function ensureClusterLog(clusterIndex, clusterId) {
+      const existing = state.vlmLogMap.get(clusterIndex);
+      if (existing) {
+        return existing;
+      }
+
+      if (vlmLogList.querySelector('.empty')) {
+        vlmLogList.innerHTML = '';
+      }
+
+      const card = document.createElement('article');
+      card.className = 'vlm-log-card';
+      card.innerHTML = `
+        <div class="vlm-log-header">
+          <strong>Cluster ${escapeHtml(clusterId)}</strong>
+          <span class="chip">running</span>
+        </div>
+        <div class="picked-summary">等待模型输出...</div>
+        <div class="vlm-log-output"></div>
+      `;
+      vlmLogList.appendChild(card);
+
+      const record = {
+        card,
+        statusChip: card.querySelector('.chip'),
+        summary: card.querySelector('.picked-summary'),
+        output: card.querySelector('.vlm-log-output'),
+      };
+      state.vlmLogMap.set(clusterIndex, record);
+      return record;
+    }
+
+    function appendVlmToken(clusterIndex, clusterId, text, isThinking) {
+      const record = ensureClusterLog(clusterIndex, clusterId);
+      const span = document.createElement('span');
+      span.className = isThinking ? 'thinking-token' : 'answer-token';
+      span.textContent = text;
+      record.output.appendChild(span);
+      record.card.scrollIntoView({ block: 'nearest' });
+    }
+
+    function markVlmClusterDone(clusterIndex, clusterId, selectedImageId, contentText) {
+      const record = ensureClusterLog(clusterIndex, clusterId);
+      record.statusChip.textContent = selectedImageId === null ? 'no pick' : `pick ${selectedImageId}`;
+      record.summary.textContent = selectedImageId === null
+        ? '未能解析 {"select": N}。'
+        : `已选择 image_id=${selectedImageId}。${truncateText(contentText)}`;
+    }
+
+    function markVlmClusterSkipped(clusterIndex, clusterId, selectedImageId) {
+      const record = ensureClusterLog(clusterIndex, clusterId);
+      record.statusChip.textContent = 'skipped';
+      record.summary.textContent = selectedImageId === null
+        ? '这个 cluster 已跳过。'
+        : `这个 cluster 已有结果，沿用 select=${selectedImageId}。`;
+    }
+
+    function renderModelOptions(models, preferredModel = '') {
+      const options = models.length
+        ? models.map(model => `<option value="${escapeHtml(model)}">${escapeHtml(model)}</option>`).join('')
+        : '<option value="">没有可选模型</option>';
+      vlmModelSelect.innerHTML = options;
+      if (preferredModel && models.includes(preferredModel)) {
+        vlmModelSelect.value = preferredModel;
+      }
+    }
+
+    async function refreshVlmModels() {
+      const endpoint = vlmEndpointInput.value.trim();
+      if (!endpoint) {
+        setVlmDialogStatus('missing endpoint');
+        renderModelOptions([]);
+        return;
+      }
+
+      refreshVlmModelsButton.disabled = true;
+      setVlmDialogStatus('loading models');
+      try {
+        const result = await requestJson('/api/vlm/models', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            endpoint,
+            api_key: vlmApiKeyInput.value,
+          }),
+        });
+        renderModelOptions(result.models, vlmModelSelect.value);
+        setVlmDialogStatus(`models ${result.models.length}`);
+      } catch (error) {
+        renderModelOptions([]);
+        setVlmDialogStatus('model load failed');
+        resetVlmLogs(`模型拉取失败：${String(error)}`);
+      } finally {
+        refreshVlmModelsButton.disabled = false;
+      }
+    }
+
+    function ensureVlmModelsLoaded() {
+      if (vlmEndpointInput.value.trim() && !vlmModelSelect.options.length) {
+        refreshVlmModels().catch(error => {
+          resetVlmLogs(String(error));
+        });
+      }
+    }
+
+    async function cancelVlmPick() {
+      if (!state.vlmRunning) return;
+
+      cancelVlmPickButton.disabled = true;
+      setVlmDialogStatus('cancelling');
+      try {
+        if (state.currentVlmJobId) {
+          await requestJson(`/api/vlm/jobs/${state.currentVlmJobId}/cancel`, { method: 'POST' });
+        }
+        if (state.vlmAbortController) {
+          state.vlmAbortController.abort();
+        }
+      } catch (error) {
+        cancelVlmPickButton.disabled = false;
+        setVlmDialogStatus('cancel failed');
+        resetVlmLogs(`取消 VLM 挑图失败：${String(error)}`);
+      }
+    }
+
+    async function clearVlmPicks() {
+      const resultPath = getResultPath();
+      if (!resultPath) {
+        resetVlmLogs('当前没有可清空的 pick 结果。');
+        return;
+      }
+
+      clearVlmPicksButton.disabled = true;
+      try {
+        const result = await requestJson('/api/vlm/picks/clear', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ result_path: resultPath }),
+        });
+        state.currentResult = result.result;
+        renderResult(result.result);
+        setVlmDialogStatus('cleared');
+        resetVlmLogs(`已清空 ${result.cleared_clusters} 个 cluster 的 pick 结果。`);
+      } catch (error) {
+        setVlmDialogStatus('clear failed');
+        resetVlmLogs(`清空 pick 结果失败：${String(error)}`);
+      } finally {
+        clearVlmPicksButton.disabled = false;
+      }
+    }
+
+    function parseSseChunk(rawChunk) {
+      const lines = rawChunk.split('\n');
+      const dataLines = lines
+        .filter(line => line.startsWith('data:'))
+        .map(line => line.slice(5).trim())
+        .filter(Boolean);
+      if (!dataLines.length) return null;
+      return JSON.parse(dataLines.join('\n'));
+    }
+
+    async function streamVlmPick() {
+      if (!state.currentResult?.clusters?.length) {
+        resetVlmLogs('请先完成一次聚类，再执行 VLM 挑图。');
+        return;
+      }
+
+      const payload = {
+        result_path: getResultPath(),
+        endpoint: vlmEndpointInput.value.trim(),
+        model: vlmModelSelect.value,
+        prompt: vlmPromptInput.value,
+        api_key: vlmApiKeyInput.value,
+        only_unpicked: vlmOnlyUnpickedCheckbox.checked,
+        overwrite_existing: vlmOverwriteCheckbox.checked,
+      };
+
+      if (!payload.result_path) {
+        resetVlmLogs('当前没有可写回的 result JSON。');
+        return;
+      }
+      if (!payload.endpoint || !payload.model || !payload.prompt.trim()) {
+        resetVlmLogs('请完整填写 endpoint、模型和 prompt。');
+        return;
+      }
+
+      state.vlmRunning = true;
+      state.currentVlmJobId = null;
+      startVlmPickButton.disabled = true;
+      cancelVlmPickButton.disabled = false;
+      setVlmDialogStatus('running');
+      resetVlmLogs('准备开始 VLM 挑图...');
+      state.vlmAbortController = new AbortController();
+
+      try {
+        const response = await fetch('/api/vlm/pick/stream', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+          signal: state.vlmAbortController.signal,
+        });
+        if (!response.ok) {
+          const text = await response.text();
+          throw new Error(text || `Request failed: ${response.status}`);
+        }
+        if (!response.body) {
+          throw new Error('Streaming response body is missing');
+        }
+
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = '';
+
+        while (true) {
+          const { value, done } = await reader.read();
+          buffer += decoder.decode(value || new Uint8Array(), { stream: !done });
+
+          const chunks = buffer.split('\n\n');
+          buffer = chunks.pop() || '';
+
+          for (const chunk of chunks) {
+            const event = parseSseChunk(chunk);
+            if (!event) continue;
+
+            if (event.type === 'start') {
+              state.currentVlmJobId = event.job_id || null;
+              resetVlmLogs(`开始处理 ${payload.result_path}`);
+              continue;
+            }
+
+            if (event.type === 'cluster_start') {
+              ensureClusterLog(event.cluster_index, event.cluster_id);
+              continue;
+            }
+
+            if (event.type === 'cluster_skipped') {
+              markVlmClusterSkipped(
+                event.cluster_index,
+                event.cluster_id,
+                event.select ?? null,
+              );
+              continue;
+            }
+
+            if (event.type === 'token') {
+              appendVlmToken(event.cluster_index, event.cluster_id, event.text, event.is_thinking);
+              continue;
+            }
+
+            if (event.type === 'cluster_done') {
+              markVlmClusterDone(
+                event.cluster_index,
+                event.cluster_id,
+                event.select ?? event.selected_image_id ?? null,
+                event.content_text || '',
+              );
+              continue;
+            }
+
+            if (event.type === 'done') {
+              state.currentResult = event.result;
+              renderResult(event.result);
+              setStatus('VLM 挑图完成', '已将选择结果写回 cluster JSON。', Number(progressFill.style.width.replace('%', '') || '0'), [event.result_path]);
+              setVlmDialogStatus('done');
+              await refreshCacheStatus();
+              continue;
+            }
+
+            if (event.type === 'cancelled') {
+              setVlmDialogStatus('cancelled');
+              resetVlmLogs(event.message || 'VLM 挑图已取消。');
+              continue;
+            }
+
+            if (event.type === 'error') {
+              setVlmDialogStatus('error');
+              resetVlmLogs(`VLM 挑图失败：${event.message}`);
+            }
+          }
+
+          if (done) break;
+        }
+      } catch (error) {
+        if (error?.name === 'AbortError') {
+          setVlmDialogStatus('cancelled');
+          resetVlmLogs('VLM 挑图取消请求已发送。');
+        } else {
+          setVlmDialogStatus('error');
+          resetVlmLogs(`VLM 挑图失败：${String(error)}`);
+        }
+      } finally {
+        state.vlmRunning = false;
+        state.currentVlmJobId = null;
+        state.vlmAbortController = null;
+        startVlmPickButton.disabled = false;
+        cancelVlmPickButton.disabled = true;
+      }
+    }
+
     function renderClusters(result) {
       if (!result.clusters.length) {
         renderEmpty(clustersContainer, '没有聚出多张相似图，当前结果只有单图或相似度不够高。');
         return;
       }
-      clustersContainer.className = 'results';
-      clustersContainer.innerHTML = result.clusters.map(cluster => `
-        <article class="cluster-card">
-          <div class="chip-row">
-            <span class="chip">Cluster ${cluster.cluster_id}</span>
-            <span class="chip">${cluster.size} 张</span>
-            <span class="chip">平均相似度 ${cluster.average_similarity.toFixed(4)}</span>
-          </div>
-          <div class="thumb-grid">
-            ${cluster.items.map(item => `
-              <div class="thumb">
-                <img loading="lazy" src="${imageUrl(item.jpg_path)}" alt="cluster item" />
-                <div class="caption">${item.source_path}</div>
+
+      clustersContainer.className = 'cluster-list';
+      clustersContainer.innerHTML = result.clusters.map(cluster => {
+        const selectedId = clusterSelectedId(cluster);
+        const selectedItem = findSelectedItem(cluster);
+        const modelPickEntries = getModelPickEntries(cluster);
+        const compareBlock = modelPickEntries.length
+          ? `
+            <div class="model-compare-box">
+              <div class="picked-photo-title">模型选择对比</div>
+              <div class="chip-row">
+                ${modelPickEntries.map(entry => `<span class="chip">${escapeHtml(entry.label)} -> image_id ${entry.select}</span>`).join('')}
               </div>
+            </div>
+          `
+          : '';
+        const selectedBlock = selectedItem
+          ? `
+            <div class="picked-photo-card">
+              <a href="${imageUrl(selectedItem.jpg_path)}" target="_blank" rel="noopener noreferrer" title="${escapeHtml(selectedItem.source_path)}">
+                <img loading="lazy" src="${imageUrl(selectedItem.jpg_path)}" alt="${escapeHtml(fileName(selectedItem.source_path))}" />
+              </a>
+              <div class="picked-photo-meta">
+                <div class="picked-photo-title">VLM 最终选择</div>
+                <div class="chip-row">
+                  <span class="chip">image_id ${selectedId}</span>
+                  <span class="chip">编号从 0 开始</span>
+                </div>
+                <div class="picked-photo-note">${escapeHtml(fileName(selectedItem.source_path))}</div>
+                <div class="path-text">${escapeHtml(selectedItem.source_path)}</div>
+                <div class="picked-summary">${escapeHtml(truncateText(cluster.vlm_pick?.content_text || cluster.vlm_pick?.transcript_text || ''))}</div>
+              </div>
+            </div>
+          `
+          : '';
+
+        return `
+        <article class="cluster-section">
+          <div class="summary-header">
+            <h3>Cluster ${cluster.cluster_id}</h3>
+            <div class="chip-row">
+              <span class="chip">${cluster.size} 张</span>
+              <span class="chip">平均相似度 ${Number(cluster.average_similarity).toFixed(4)}</span>
+              ${selectedId !== null
+                ? `<span class="chip">VLM 选择 ${selectedId}</span>`
+                : ''}
+            </div>
+          </div>
+          ${cluster.vlm_pick
+            ? `<div class="picked-summary">${selectedId === null
+                ? 'VLM 已运行，但未能解析 {"select": N}。'
+                : `VLM 选择 image_id=${selectedId}。${escapeHtml(truncateText(cluster.vlm_pick.content_text || cluster.vlm_pick.transcript_text || ''))}`}</div>`
+            : ''}
+          ${selectedBlock}
+          ${compareBlock}
+          <div class="photo-wall">
+            ${cluster.items.map(item => `
+              <a
+                class="photo-tile ${selectedId === item.image_id ? 'selected' : ''}"
+                href="${imageUrl(item.jpg_path)}"
+                target="_blank"
+                rel="noopener noreferrer"
+                title="${escapeHtml(item.source_path)}"
+              >
+                <span class="photo-id-badge">id ${item.image_id ?? 0}</span>
+                ${selectionBadgesHtml(cluster, item)}
+                <img loading="lazy" src="${imageUrl(item.jpg_path)}" alt="${escapeHtml(fileName(item.source_path))}" />
+                <span class="photo-overlay">
+                  <span class="file-name">${escapeHtml(fileName(item.source_path))}</span>
+                  <span class="file-path">image_id=${item.image_id ?? 0}</span>
+                  <span class="file-path">${escapeHtml(item.source_path)}</span>
+                </span>
+              </a>
             `).join('')}
           </div>
         </article>
-      `).join('');
-    }
-
-    function renderPairs(result) {
-      const filteredPairs = result.similar_pairs.filter(
-        pair => pair.similarity >= state.similarityThreshold,
-      );
-
-      statPairs.textContent = `${filteredPairs.length}/${result.similar_pairs.length}`;
-
-      if (!filteredPairs.length) {
-        renderEmpty(pairsContainer, `当前滑杆阈值 ${state.similarityThreshold.toFixed(3)} 下没有匹配的高相似图片对。`);
-        return;
-      }
-      pairsContainer.className = 'results';
-      pairsContainer.innerHTML = filteredPairs.slice(0, 24).map(pair => `
-        <article class="pair-card">
-          <div class="chip-row"><span class="chip">相似度 ${pair.similarity.toFixed(4)}</span></div>
-          <div class="pair-grid">
-            <div class="thumb">
-              <img loading="lazy" src="${imageUrl(pair.source_jpg_path)}" alt="pair source" />
-              <div class="caption">${pair.source_path}</div>
-            </div>
-            <div class="thumb">
-              <img loading="lazy" src="${imageUrl(pair.target_jpg_path)}" alt="pair target" />
-              <div class="caption">${pair.target_path}</div>
-            </div>
-          </div>
-        </article>
-      `).join('');
+      `;
+      }).join('');
     }
 
     function renderResult(result) {
       state.currentResult = result;
-      statPhotos.textContent = result.total_photos;
-      statClusters.textContent = result.cluster_count;
+      statPhotos.textContent = String(result.total_photos);
+      statClusters.textContent = String(result.cluster_count);
       statResult.textContent = result.result_path;
       setClusterSimilarityThreshold(
         result.cluster_similarity_threshold ?? state.clusterSimilarityThreshold,
       );
+      updateVlmDialogContext();
       renderClusters(result);
     }
 
@@ -395,6 +1442,24 @@
       }
     }
 
+    async function finishJobState(job) {
+      clearInterval(state.pollingTimer);
+      state.pollingTimer = null;
+      startButton.disabled = false;
+      cancelButton.disabled = true;
+      pickButton.disabled = false;
+      clearCacheButton.disabled = false;
+      await refreshCacheStatus();
+
+      if (job.status === 'done') {
+        renderResult(job.result);
+      } else if (job.status === 'error') {
+        renderEmpty(clustersContainer, `处理失败：${job.error}`);
+      } else if (job.status === 'cancelled') {
+        renderEmpty(clustersContainer, '任务已取消，没有继续展示聚类结果。');
+      }
+    }
+
     async function pollJob() {
       if (!state.jobId) return;
       try {
@@ -402,33 +1467,22 @@
         const chips = [`阶段 ${job.stage}`, `${Math.round(job.percent)}%`, `${job.current}/${job.total}`];
         if (job.result_path) chips.push(`JSON ${job.result_path}`);
         setStatus(
-          job.status === 'error' ? '处理失败' : job.status === 'cancelled' ? '已取消' : job.status === 'cancelling' ? '正在取消' : job.status === 'done' ? '处理完成' : '正在处理',
+          job.status === 'error'
+            ? '处理失败'
+            : job.status === 'cancelled'
+              ? '已取消'
+              : job.status === 'cancelling'
+                ? '正在取消'
+                : job.status === 'done'
+                  ? '处理完成'
+                  : '正在处理',
           job.message,
           job.percent,
           chips,
         );
 
-        if (job.status === 'done') {
-          clearInterval(state.pollingTimer);
-          state.pollingTimer = null;
-          startButton.disabled = false;
-          cancelButton.disabled = true;
-          pickButton.disabled = false;
-          renderResult(job.result);
-        } else if (job.status === 'error') {
-          clearInterval(state.pollingTimer);
-          state.pollingTimer = null;
-          startButton.disabled = false;
-          cancelButton.disabled = true;
-          pickButton.disabled = false;
-          renderEmpty(clustersContainer, `处理失败：${job.error}`);
-        } else if (job.status === 'cancelled') {
-          clearInterval(state.pollingTimer);
-          state.pollingTimer = null;
-          startButton.disabled = false;
-          cancelButton.disabled = true;
-          pickButton.disabled = false;
-          renderEmpty(clustersContainer, '任务已取消，没有继续展示聚类结果。');
+        if (job.status === 'done' || job.status === 'error' || job.status === 'cancelled') {
+          await finishJobState(job);
         }
       } catch (error) {
         clearInterval(state.pollingTimer);
@@ -436,6 +1490,7 @@
         startButton.disabled = false;
         cancelButton.disabled = true;
         pickButton.disabled = false;
+        clearCacheButton.disabled = false;
         setStatus('轮询失败', String(error), 0, []);
       }
     }
@@ -448,6 +1503,7 @@
         cluster_similarity_threshold: state.clusterSimilarityThreshold,
         limit: limitInput.value ? Number(limitInput.value) : null,
       };
+
       if (!payload.input_dir) {
         setStatus('缺少目录', '请先点击“选择目录”。', 0, []);
         return;
@@ -456,6 +1512,8 @@
       startButton.disabled = true;
       cancelButton.disabled = false;
       pickButton.disabled = true;
+      clearCacheButton.disabled = true;
+      startVlmPickButton.disabled = true;
       renderEmpty(clustersContainer, '任务已开始，等待聚类结果。');
 
       try {
@@ -465,7 +1523,12 @@
           body: JSON.stringify(payload),
         });
         state.jobId = response.job_id;
-        setStatus('任务已启动', '服务器正在并行准备图片和计算聚类。', 2, [`job ${state.jobId}`, `workers ${payload.workers}`, `similarity ${payload.cluster_similarity_threshold.toFixed(3)}`]);
+        setStatus(
+          '任务已启动',
+          '服务器正在并行准备图片和计算聚类。',
+          2,
+          [`job ${state.jobId}`, `workers ${payload.workers}`, `similarity ${payload.cluster_similarity_threshold.toFixed(3)}`],
+        );
         if (state.pollingTimer) clearInterval(state.pollingTimer);
         state.pollingTimer = setInterval(pollJob, 1000);
         pollJob();
@@ -473,6 +1536,8 @@
         startButton.disabled = false;
         cancelButton.disabled = true;
         pickButton.disabled = false;
+        clearCacheButton.disabled = false;
+        startVlmPickButton.disabled = false;
         setStatus('启动失败', String(error), 0, []);
       }
     }
@@ -482,10 +1547,41 @@
       cancelButton.disabled = true;
       try {
         await requestJson(`/api/jobs/${state.jobId}/cancel`, { method: 'POST' });
-        setStatus('正在取消', '已经发送取消请求，等待当前批次结束。', Number(progressFill.style.width.replace('%', '') || '0'), ['cancel requested']);
+        setStatus(
+          '正在取消',
+          '已经发送取消请求，等待当前批次结束。',
+          Number(progressFill.style.width.replace('%', '') || '0'),
+          ['cancel requested'],
+        );
       } catch (error) {
         cancelButton.disabled = false;
         setStatus('取消失败', String(error), Number(progressFill.style.width.replace('%', '') || '0'), []);
+      }
+    }
+
+    async function clearCache() {
+      clearCacheButton.disabled = true;
+      try {
+        const result = await requestJson('/api/cache/embedding/clear', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            output_dir: outputDir.value.trim() || undefined,
+          }),
+        });
+        await refreshCacheStatus();
+        setStatus(
+          '缓存已清空',
+          `已删除 ${result.removed_files} 个 embedding 缓存文件。`,
+          0,
+          [result.cache_dir],
+        );
+      } catch (error) {
+        setStatus('清缓存失败', String(error), Number(progressFill.style.width.replace('%', '') || '0'), []);
+      } finally {
+        if (!state.jobId || cancelButton.disabled) {
+          clearCacheButton.disabled = false;
+        }
       }
     }
 
@@ -493,15 +1589,64 @@
       const defaults = await requestJson('/api/defaults');
       outputDir.value = defaults.output_dir;
       workersInput.value = '8';
+      vlmEndpointInput.value = defaults.vlm_endpoint || '';
+      vlmPromptInput.value = defaults.vlm_prompt || '';
+      state.vlmDefaultsLoaded = true;
       setClusterSimilarityThreshold(state.clusterSimilarityThreshold);
-      setStatus('等待开始', '点击“选择目录”会调用系统原生目录选择器。滑杆会控制聚类严格程度。', 0, [defaults.output_dir]);
+      setStatus(
+        '等待开始',
+        '点击“选择目录”会调用系统原生目录选择器。页面会随窗口宽度自动调整，结果区是平铺照片墙。',
+        0,
+        [defaults.output_dir],
+      );
+      updateVlmDialogContext();
+      ensureVlmModelsLoaded();
+      await refreshCacheStatus();
     }
 
     pickButton.addEventListener('click', pickDirectory);
     startButton.addEventListener('click', startJob);
     cancelButton.addEventListener('click', cancelJob);
+    clearCacheButton.addEventListener('click', clearCache);
+    refreshVlmModelsButton.addEventListener('click', () => {
+      refreshVlmModels().catch(error => {
+        resetVlmLogs(String(error));
+      });
+    });
+    startVlmPickButton.addEventListener('click', () => {
+      streamVlmPick().catch(error => {
+        resetVlmLogs(String(error));
+      });
+    });
+    cancelVlmPickButton.addEventListener('click', () => {
+      cancelVlmPick().catch(error => {
+        resetVlmLogs(String(error));
+      });
+    });
+    clearVlmPicksButton.addEventListener('click', () => {
+      clearVlmPicks().catch(error => {
+        resetVlmLogs(String(error));
+      });
+    });
     similaritySlider.addEventListener('input', event => {
       setClusterSimilarityThreshold(event.target.value);
+    });
+    vlmOverwriteCheckbox.addEventListener('change', () => {
+      if (vlmOverwriteCheckbox.checked) {
+        vlmOnlyUnpickedCheckbox.checked = false;
+      }
+    });
+    vlmOnlyUnpickedCheckbox.addEventListener('change', () => {
+      if (vlmOnlyUnpickedCheckbox.checked) {
+        vlmOverwriteCheckbox.checked = false;
+      }
+    });
+    outputDir.addEventListener('change', refreshCacheStatus);
+    outputDir.addEventListener('blur', refreshCacheStatus);
+    vlmEndpointInput.addEventListener('change', () => {
+      refreshVlmModels().catch(error => {
+        resetVlmLogs(String(error));
+      });
     });
 
     bootstrap().catch(error => {

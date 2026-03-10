@@ -1,7 +1,10 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
+import shutil
+import threading
 from concurrent.futures import FIRST_COMPLETED, Future, ThreadPoolExecutor, wait
 from dataclasses import dataclass
 from pathlib import Path
@@ -21,6 +24,7 @@ from convert_raw_to_jpg import OUTPUT_DIR, SUPPORTED_EXTENSIONS, convert_raw_to_
 
 
 EMBEDDING_MODEL_ID = "damo/multi-modal_clip-vit-base-patch16_zh"
+EMBEDDING_CACHE_DIRNAME = ".embedding_cache"
 DIRECT_IMAGE_EXTENSIONS = {".jpg", ".jpeg"}
 CONVERTIBLE_IMAGE_EXTENSIONS = {".png", ".webp"}
 ProgressCallback = Callable[[dict[str, Any]], None]
@@ -35,6 +39,14 @@ class PhotoItem:
 
 class JobCancelledError(RuntimeError):
     pass
+
+
+@dataclass
+class LoadedEmbeddingModel:
+    model_dir: Path
+    model: CLIPForMultiModalEmbedding
+    transform: Compose
+    inference_lock: threading.Lock
 
 
 def emit_progress(
@@ -66,14 +78,23 @@ def ensure_not_cancelled(cancel_check: CancelCheck | None) -> None:
 
 class ModelScopeClipImageEmbedder:
 
-    def __init__(self, model_id: str = EMBEDDING_MODEL_ID):
-        self.model_id = model_id
-        self.model_dir = Path(snapshot_download(model_id))
-        self.model = CLIPForMultiModalEmbedding(str(self.model_dir))
-        self.transform = self._build_transform()
+    _loaded_models: dict[str, LoadedEmbeddingModel] = {}
+    _loaded_models_lock = threading.Lock()
 
-    def _build_transform(self) -> Compose:
-        with (self.model_dir / "vision_model_config.json").open(encoding="utf-8") as file:
+    def __init__(self, model_id: str = EMBEDDING_MODEL_ID, cache_root: Path = OUTPUT_DIR):
+        self.model_id = model_id
+        self.cache_root = cache_root.expanduser().resolve()
+        self.cache_dir = self.cache_root / EMBEDDING_CACHE_DIRNAME
+        self.cache_dir.mkdir(parents=True, exist_ok=True)
+        loaded_model, self.reused_model = self._get_loaded_model(model_id)
+        self.model_dir = loaded_model.model_dir
+        self.model = loaded_model.model
+        self.transform = loaded_model.transform
+        self.inference_lock = loaded_model.inference_lock
+
+    @staticmethod
+    def _build_transform(model_dir: Path) -> Compose:
+        with (model_dir / "vision_model_config.json").open(encoding="utf-8") as file:
             image_resolution = json.load(file)["image_resolution"]
 
         return Compose(
@@ -88,6 +109,65 @@ class ModelScopeClipImageEmbedder:
             ]
         )
 
+    @classmethod
+    def _get_loaded_model(cls, model_id: str) -> tuple[LoadedEmbeddingModel, bool]:
+        with cls._loaded_models_lock:
+            cached_model = cls._loaded_models.get(model_id)
+            if cached_model is not None:
+                return cached_model, True
+
+            model_dir = Path(snapshot_download(model_id))
+            loaded_model = LoadedEmbeddingModel(
+                model_dir=model_dir,
+                model=CLIPForMultiModalEmbedding(str(model_dir)),
+                transform=cls._build_transform(model_dir),
+                inference_lock=threading.Lock(),
+            )
+            cls._loaded_models[model_id] = loaded_model
+            return loaded_model, False
+
+    def _embedding_cache_path(self, image_path: Path) -> Path:
+        cache_key = hashlib.sha256(
+            f"{self.model_id}\n{image_path}".encode("utf-8")
+        ).hexdigest()
+        return self.cache_dir / f"{cache_key}.npz"
+
+    def _load_cached_embedding(self, image_path: Path) -> np.ndarray | None:
+        cache_path = self._embedding_cache_path(image_path)
+        if not cache_path.exists():
+            return None
+
+        stat = image_path.stat()
+        try:
+            with np.load(cache_path, allow_pickle=False) as cached:
+                cached_model_id = str(cached["model_id"].item())
+                cached_path = str(cached["image_path"].item())
+                cached_mtime_ns = int(cached["mtime_ns"].item())
+                cached_size = int(cached["file_size"].item())
+                embedding = np.array(cached["embedding"], dtype=np.float32)
+        except Exception:
+            return None
+
+        if cached_model_id != self.model_id:
+            return None
+        if cached_path != str(image_path):
+            return None
+        if cached_mtime_ns != stat.st_mtime_ns or cached_size != stat.st_size:
+            return None
+        return embedding
+
+    def _save_cached_embedding(self, image_path: Path, embedding: np.ndarray) -> None:
+        cache_path = self._embedding_cache_path(image_path)
+        stat = image_path.stat()
+        np.savez_compressed(
+            cache_path,
+            model_id=np.array(self.model_id),
+            image_path=np.array(str(image_path)),
+            mtime_ns=np.array(stat.st_mtime_ns, dtype=np.int64),
+            file_size=np.array(stat.st_size, dtype=np.int64),
+            embedding=np.asarray(embedding, dtype=np.float32),
+        )
+
     def embed_images(
         self,
         image_paths: list[Path],
@@ -95,8 +175,12 @@ class ModelScopeClipImageEmbedder:
         progress_callback: ProgressCallback | None = None,
         cancel_check: CancelCheck | None = None,
     ) -> np.ndarray:
-        batches: list[np.ndarray] = []
         total_count = len(image_paths)
+        embeddings_by_index: list[np.ndarray | None] = [None] * total_count
+        uncached_indexes: list[int] = []
+        uncached_paths: list[Path] = []
+        done_count = 0
+        cache_hit_count = 0
 
         emit_progress(
             progress_callback,
@@ -107,10 +191,34 @@ class ModelScopeClipImageEmbedder:
             model_id=self.model_id,
         )
 
+        for index, image_path in enumerate(image_paths):
+            ensure_not_cancelled(cancel_check)
+            cached_embedding = self._load_cached_embedding(image_path)
+            if cached_embedding is not None:
+                embeddings_by_index[index] = cached_embedding
+                done_count += 1
+                cache_hit_count += 1
+                emit_progress(
+                    progress_callback,
+                    stage="embedding",
+                    current=done_count,
+                    total=total_count,
+                    message=(
+                        f"已完成 {done_count}/{total_count} 张图片 embedding "
+                        f"(缓存命中 {cache_hit_count})"
+                    ),
+                    model_id=self.model_id,
+                    cache_hits=cache_hit_count,
+                )
+            else:
+                uncached_indexes.append(index)
+                uncached_paths.append(image_path)
+
         with torch.no_grad():
-            for start_index in range(0, total_count, batch_size):
+            for start_index in range(0, len(uncached_paths), batch_size):
                 ensure_not_cancelled(cancel_check)
-                batch_paths = image_paths[start_index:start_index + batch_size]
+                batch_paths = uncached_paths[start_index:start_index + batch_size]
+                batch_indexes = uncached_indexes[start_index:start_index + batch_size]
                 image_tensors = []
                 for image_path in batch_paths:
                     ensure_not_cancelled(cancel_check)
@@ -118,25 +226,71 @@ class ModelScopeClipImageEmbedder:
                         image_tensors.append(self.transform(image))
 
                 batch_tensor = torch.stack(image_tensors, dim=0)
-                result = self.model({"img": batch_tensor})
+                with self.inference_lock:
+                    result = self.model({"img": batch_tensor})
                 batch_embeddings = result[OutputKeys.IMG_EMBEDDING].cpu().numpy()
-                batches.append(batch_embeddings)
-                end_index = start_index + len(batch_paths)
+
+                for batch_offset, image_path in enumerate(batch_paths):
+                    embedding = np.asarray(batch_embeddings[batch_offset], dtype=np.float32)
+                    embeddings_by_index[batch_indexes[batch_offset]] = embedding
+                    self._save_cached_embedding(image_path, embedding)
+
+                done_count += len(batch_paths)
                 emit_progress(
                     progress_callback,
                     stage="embedding",
-                    current=end_index,
+                    current=done_count,
                     total=total_count,
-                    message=f"已完成 {end_index}/{total_count} 张图片 embedding",
+                    message=(
+                        f"已完成 {done_count}/{total_count} 张图片 embedding "
+                        f"(缓存命中 {cache_hit_count})"
+                    ),
                     model_id=self.model_id,
+                    cache_hits=cache_hit_count,
                 )
 
-        return np.vstack(batches) if batches else np.empty((0, 512), dtype=np.float32)
+        if not embeddings_by_index:
+            return np.empty((0, 512), dtype=np.float32)
+
+        return np.vstack([embedding for embedding in embeddings_by_index if embedding is not None])
 
 
 def build_cached_jpg_path(source_path: Path, output_dir: Path) -> Path:
     parent_name = source_path.parent.name or "root"
     return output_dir / f"{parent_name}__{source_path.stem}.jpg"
+
+
+def embedding_cache_dir(output_dir: Path) -> Path:
+    return output_dir.expanduser().resolve() / EMBEDDING_CACHE_DIRNAME
+
+
+def get_embedding_cache_status(output_dir: Path) -> dict[str, object]:
+    cache_dir = embedding_cache_dir(output_dir)
+    file_count = 0
+    total_bytes = 0
+
+    if cache_dir.exists():
+        for path in cache_dir.rglob("*"):
+            if path.is_file():
+                file_count += 1
+                total_bytes += path.stat().st_size
+
+    return {
+        "cache_dir": str(cache_dir),
+        "file_count": file_count,
+        "total_bytes": total_bytes,
+        "exists": cache_dir.exists(),
+    }
+
+
+def clear_embedding_cache(output_dir: Path) -> tuple[Path, int]:
+    cache_dir = embedding_cache_dir(output_dir)
+    removed_files = 0
+    if cache_dir.exists():
+        removed_files = sum(1 for path in cache_dir.rglob("*") if path.is_file())
+        shutil.rmtree(cache_dir)
+    cache_dir.mkdir(parents=True, exist_ok=True)
+    return cache_dir, removed_files
 
 
 def default_cluster_result_path(input_dir: Path, output_dir: Path) -> Path:
@@ -284,6 +438,15 @@ def compute_cluster_average_similarity(
     return sum(similarities) / len(similarities)
 
 
+def photo_item_sort_key(item: PhotoItem) -> tuple[int, str, str]:
+    stat = item.source_path.stat()
+    return (
+        stat.st_mtime_ns,
+        item.source_path.name.lower(),
+        str(item.source_path),
+    )
+
+
 def build_result(
     items: list[PhotoItem],
     embeddings: np.ndarray,
@@ -300,11 +463,22 @@ def build_result(
     for item_index, label in enumerate(labels.tolist()):
         cluster_map.setdefault(int(label), []).append(item_index)
 
+    sorted_cluster_entries: list[tuple[int, list[int]]] = []
+    for cluster_id, indices in cluster_map.items():
+        sorted_indices = sorted(indices, key=lambda index: photo_item_sort_key(items[index]))
+        sorted_cluster_entries.append((cluster_id, sorted_indices))
+
+    sorted_cluster_entries.sort(
+        key=lambda entry: (
+            -len(entry[1]),
+            photo_item_sort_key(items[entry[1][0]]),
+            entry[0],
+        )
+    )
+
     clusters = []
     singletons = []
-    for cluster_id, indices in sorted(
-        cluster_map.items(), key=lambda item: (-len(item[1]), item[0])
-    ):
+    for cluster_id, indices in sorted_cluster_entries:
         cluster_entry = {
             "cluster_id": cluster_id,
             "size": len(indices),
@@ -313,10 +487,11 @@ def build_result(
             ),
             "items": [
                 {
+                    "image_id": image_id,
                     "source_path": str(items[index].source_path),
                     "jpg_path": str(items[index].jpg_path),
                 }
-                for index in indices
+                for image_id, index in enumerate(indices)
             ],
         }
         if len(indices) > 1:
@@ -338,6 +513,64 @@ def build_result(
         "singletons": singletons,
         "embedding_shape": list(embeddings.shape),
     }
+
+
+def _cluster_identity(cluster: dict[str, object]) -> tuple[str, ...]:
+    items = cluster.get("items", [])
+    if not isinstance(items, list):
+        return ()
+    source_paths = []
+    for item in items:
+        if isinstance(item, dict) and isinstance(item.get("source_path"), str):
+            source_paths.append(item["source_path"])
+    return tuple(source_paths)
+
+
+def preserve_existing_vlm_pick_cache(result: dict[str, object], result_path: Path) -> dict[str, object]:
+    if not result_path.exists() or not result_path.is_file():
+        return result
+
+    try:
+        with result_path.open("r", encoding="utf-8") as file:
+            existing_result = json.load(file)
+    except Exception:
+        return result
+
+    if not isinstance(existing_result, dict):
+        return result
+
+    existing_clusters = existing_result.get("clusters", [])
+    if not isinstance(existing_clusters, list):
+        return result
+
+    existing_cluster_map: dict[tuple[str, ...], dict[str, object]] = {}
+    for cluster in existing_clusters:
+        if not isinstance(cluster, dict):
+            continue
+        identity = _cluster_identity(cluster)
+        if identity:
+            existing_cluster_map[identity] = cluster
+
+    result_clusters = result.get("clusters", [])
+    if not isinstance(result_clusters, list):
+        return result
+
+    for cluster in result_clusters:
+        if not isinstance(cluster, dict):
+            continue
+        identity = _cluster_identity(cluster)
+        existing_cluster = existing_cluster_map.get(identity)
+        if existing_cluster is None:
+            continue
+        existing_pick = existing_cluster.get("vlm_pick")
+        if isinstance(existing_pick, dict):
+            cluster["vlm_pick"] = existing_pick
+
+    existing_top_level_pick = existing_result.get("vlm_pick")
+    if isinstance(existing_top_level_pick, dict) and "vlm_pick" not in result:
+        result["vlm_pick"] = existing_top_level_pick
+
+    return result
 
 
 def write_result(result: dict[str, object], result_path: Path) -> None:
@@ -377,7 +610,7 @@ def run_clustering(
     result_path: Path | None = None,
     batch_size: int = 16,
     workers: int = 8,
-    cluster_similarity_threshold: float = 0.88,
+    cluster_similarity_threshold: float = 0.97,
     limit: int | None = None,
     progress_callback: ProgressCallback | None = None,
     cancel_check: CancelCheck | None = None,
@@ -429,14 +662,19 @@ def run_clustering(
         message="开始加载 ModelScope embedding 模型",
         model_id=EMBEDDING_MODEL_ID,
     )
-    embedder = ModelScopeClipImageEmbedder()
+    embedder = ModelScopeClipImageEmbedder(cache_root=resolved_output_dir)
     emit_progress(
         progress_callback,
         stage="model",
         current=1,
         total=1,
-        message="ModelScope embedding 模型加载完成",
+        message=(
+            "复用已加载的 ModelScope embedding 模型"
+            if embedder.reused_model
+            else "ModelScope embedding 模型加载完成"
+        ),
         model_id=embedder.model_id,
+        model_reused=embedder.reused_model,
     )
 
     embeddings = embedder.embed_images(
@@ -470,6 +708,7 @@ def run_clustering(
         cluster_distance_threshold=cluster_distance_threshold,
         result_path=resolved_result_path,
     )
+    result = preserve_existing_vlm_pick_cache(result, resolved_result_path)
 
     emit_progress(
         progress_callback,
@@ -525,7 +764,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--cluster-similarity-threshold",
         type=float,
-        default=0.88,
+        default=0.97,
         help="Cluster similarity threshold between 0.0 and 1.0. Higher values produce tighter clusters.",
     )
     parser.add_argument(
