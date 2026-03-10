@@ -389,7 +389,7 @@
 
     .vlm-shell {
       display: grid;
-      grid-template-columns: minmax(320px, 420px) minmax(0, 1fr);
+      grid-template-columns: 1fr;
       gap: 12px;
       padding: 12px;
       background: rgba(243, 236, 227, 0.96);
@@ -397,22 +397,13 @@
       box-shadow: 0 24px 60px rgba(32, 21, 14, 0.22);
     }
 
-    .vlm-left,
-    .vlm-right {
+    .vlm-left {
       background: rgba(255, 250, 244, 0.96);
       border: 1px solid rgba(79, 57, 35, 0.08);
       padding: 16px;
       display: grid;
       gap: 12px;
       min-width: 0;
-    }
-
-    .vlm-header {
-      display: flex;
-      justify-content: space-between;
-      align-items: baseline;
-      gap: 12px;
-      flex-wrap: wrap;
     }
 
     textarea,
@@ -465,13 +456,9 @@
       padding: 0;
     }
 
-    .vlm-log-list {
+    .cluster-vlm-host {
       display: grid;
       gap: 10px;
-      align-content: start;
-      max-height: 72vh;
-      overflow: auto;
-      padding-right: 4px;
     }
 
     .vlm-log-card {
@@ -480,6 +467,10 @@
       padding: 12px;
       display: grid;
       gap: 8px;
+    }
+
+    .vlm-log-card[data-expanded="false"] .cluster-vlm-sections {
+      display: none;
     }
 
     .vlm-log-header {
@@ -500,6 +491,40 @@
       border: 1px solid rgba(79, 57, 35, 0.08);
       padding: 10px;
       min-height: 72px;
+    }
+
+    .cluster-vlm-sections {
+      display: grid;
+      gap: 10px;
+    }
+
+    .cluster-vlm-block {
+      display: grid;
+      gap: 8px;
+      padding: 10px;
+      border: 1px solid rgba(79, 57, 35, 0.08);
+      background: rgba(255, 255, 255, 0.68);
+    }
+
+    .cluster-vlm-block strong {
+      font-size: 12px;
+      color: #4a3224;
+    }
+
+    .vlm-toggle-button {
+      border: 1px solid rgba(79, 57, 35, 0.14);
+      background: rgba(255, 255, 255, 0.72);
+      color: #5c4030;
+      padding: 7px 10px;
+      font-size: 12px;
+      font-family: var(--mono);
+      font-weight: 600;
+    }
+
+    .vlm-toggle-button:hover {
+      transform: none;
+      box-shadow: none;
+      background: rgba(255, 255, 255, 0.92);
     }
 
     .thinking-token {
@@ -624,10 +649,6 @@
     }
 
     @media (max-width: 980px) {
-      .vlm-shell {
-        grid-template-columns: 1fr;
-      }
-
       .vlm-actions {
         grid-template-columns: 1fr;
       }
@@ -775,12 +796,20 @@
                 <button id="refreshVlmModelsButton" class="secondary" type="button">拉取模型</button>
               </div>
 
+              <div class="inline-grid">
+                <div>
+                  <label for="vlmConcurrencyInput">并发数</label>
+                  <input id="vlmConcurrencyInput" type="number" min="1" step="1" value="4" />
+                </div>
+                <div class="meta-text">默认 4，表示最多同时跑 4 个 cluster 的 VLM 请求。</div>
+              </div>
+
               <label for="vlmPromptInput">Prompt</label>
               <textarea id="vlmPromptInput"></textarea>
             </div>
 
             <div class="detail-box">
-              <div class="meta-text">VLM 配置不再单独弹窗，而是固定放在主页面。每个 cluster 的图片编号严格按 image_id 从 0 开始，模型最后需要返回 `{"select": N}`。</div>
+              <div class="meta-text">VLM 配置不再单独弹窗，而是固定放在主页面。每个 cluster 的图片编号严格按 image_id 从 0 开始，模型最后需要返回 {"select": N}。</div>
               <div id="vlmResultPathText" class="path-text">尚无可用的 result JSON</div>
               <div id="vlmClusterCountChip" class="chip">0 clusters</div>
             </div>
@@ -795,18 +824,7 @@
               <button id="cancelVlmPickButton" class="danger" type="button" disabled>取消 VLM 挑图</button>
               <button id="clearVlmPicksButton" class="secondary" type="button">只清空 Pick 结果</button>
             </div>
-          </section>
-
-          <section class="vlm-right">
-            <div class="vlm-header">
-              <div>
-                <div class="eyebrow" style="color: var(--muted);">Streaming</div>
-                <h3>实时输出</h3>
-              </div>
-            </div>
-            <div id="vlmLogList" class="vlm-log-list">
-              <div class="empty">先完成一次聚类，然后直接在本页启动 VLM 挑图，实时输出会显示在这里。</div>
-            </div>
+            <div id="vlmInlineHint" class="meta-text">模型输出会直接显示在对应 cluster 卡片里，不再集中放到单独区域。</div>
           </section>
         </div>
       </section>
@@ -832,6 +850,7 @@
       currentVlmJobId: null,
       vlmAbortController: null,
       vlmLogMap: new Map(),
+      vlmExpandedClusters: new Set(),
     };
 
     const inputDir = document.getElementById('inputDir');
@@ -864,6 +883,7 @@
     const vlmApiKeyInput = document.getElementById('vlmApiKeyInput');
     const vlmModelSelect = document.getElementById('vlmModelSelect');
     const refreshVlmModelsButton = document.getElementById('refreshVlmModelsButton');
+    const vlmConcurrencyInput = document.getElementById('vlmConcurrencyInput');
     const vlmPromptInput = document.getElementById('vlmPromptInput');
     const vlmOnlyUnpickedCheckbox = document.getElementById('vlmOnlyUnpickedCheckbox');
     const vlmOverwriteCheckbox = document.getElementById('vlmOverwriteCheckbox');
@@ -872,7 +892,7 @@
     const clearVlmPicksButton = document.getElementById('clearVlmPicksButton');
     const vlmDialogStatusChip = document.getElementById('vlmDialogStatusChip');
     const vlmClusterCountChip = document.getElementById('vlmClusterCountChip');
-    const vlmLogList = document.getElementById('vlmLogList');
+    const vlmInlineHint = document.getElementById('vlmInlineHint');
     const vlmResultPathText = document.getElementById('vlmResultPathText');
 
     async function requestJson(url, options) {
@@ -969,11 +989,25 @@
 
     function resetVlmLogs(message) {
       state.vlmLogMap = new Map();
-      vlmLogList.innerHTML = `<div class="empty">${escapeHtml(message)}</div>`;
+      state.vlmExpandedClusters = new Set();
+      vlmInlineHint.textContent = message;
+      if (state.currentResult?.clusters?.length) {
+        renderResult(state.currentResult);
+      }
     }
 
     function getResultPath() {
       return state.currentResult?.result_path || statResult.textContent.trim() || '';
+    }
+
+    function hasPickableClusters() {
+      return Boolean(state.currentResult?.clusters?.length) && Boolean(getResultPath());
+    }
+
+    function syncVlmActionButtons() {
+      startVlmPickButton.disabled = state.vlmRunning || !hasPickableClusters();
+      cancelVlmPickButton.disabled = !state.vlmRunning;
+      clearVlmPicksButton.disabled = state.vlmRunning || !Boolean(getResultPath());
     }
 
     function updateVlmDialogContext() {
@@ -981,6 +1015,7 @@
       vlmResultPathText.textContent = resultPath || '尚无可用的 result JSON';
       const clusterCount = state.currentResult?.clusters?.length || 0;
       vlmClusterCountChip.textContent = `${clusterCount} clusters`;
+      syncVlmActionButtons();
     }
 
     function findSelectedItem(cluster) {
@@ -1002,6 +1037,99 @@
           ${badges.map(entry => `<span class="selection-badge">${escapeHtml(entry.label)}: ${entry.select}</span>`).join('')}
         </span>
       `;
+    }
+
+    function currentModelPick(cluster) {
+      if (!cluster?.vlm_pick) return null;
+      const currentModelKey = cluster.vlm_pick.current_model_key;
+      const byModel = cluster.vlm_pick.by_model;
+      if (currentModelKey && byModel && typeof byModel === 'object') {
+        const currentEntry = byModel[currentModelKey];
+        if (currentEntry && typeof currentEntry === 'object') {
+          return currentEntry;
+        }
+      }
+      return cluster.vlm_pick;
+    }
+
+    function renderPersistedVlmOutput(cluster) {
+      const modelPick = currentModelPick(cluster);
+      if (!modelPick) {
+        return '';
+      }
+
+      const label = modelPick.label || modelPick.model || '当前模型';
+      const thinkingText = String(modelPick.thinking_text || '').trim();
+      const contentText = String(modelPick.content_text || '').trim();
+      const transcriptText = String(modelPick.transcript_text || '').trim();
+      if (!thinkingText && !contentText && !transcriptText) {
+        return '';
+      }
+
+      const clusterIndex = Number(cluster._ui_cluster_index);
+      const expanded = state.vlmExpandedClusters.has(clusterIndex);
+
+      return `
+        <article class="vlm-log-card" data-expanded="${expanded ? 'true' : 'false'}">
+          <div class="vlm-log-header">
+            <strong>模型输出</strong>
+            <div class="chip-row">
+              <span class="chip">${escapeHtml(label)}</span>
+              <button class="vlm-toggle-button" type="button" data-vlm-toggle="${clusterIndex}" aria-expanded="${expanded ? 'true' : 'false'}">${expanded ? '收起输出' : '展开输出'}</button>
+            </div>
+          </div>
+          <div class="cluster-vlm-sections">
+            ${thinkingText ? `
+              <div class="cluster-vlm-block">
+                <strong>Thinking</strong>
+                <div class="vlm-log-output"><span class="thinking-token">${escapeHtml(thinkingText)}</span></div>
+              </div>
+            ` : ''}
+            ${contentText ? `
+              <div class="cluster-vlm-block">
+                <strong>Answer</strong>
+                <div class="vlm-log-output"><span class="answer-token">${escapeHtml(contentText)}</span></div>
+              </div>
+            ` : ''}
+            ${!contentText && transcriptText ? `
+              <div class="cluster-vlm-block">
+                <strong>Transcript</strong>
+                <div class="vlm-log-output"><span class="answer-token">${escapeHtml(transcriptText)}</span></div>
+              </div>
+            ` : ''}
+          </div>
+        </article>
+      `;
+    }
+
+    function getClusterSection(clusterIndex) {
+      return clustersContainer.querySelector(`[data-cluster-index="${clusterIndex}"]`);
+    }
+
+    function applyClusterVlmExpandedState(card, expanded) {
+      if (!card) {
+        return;
+      }
+      card.dataset.expanded = expanded ? 'true' : 'false';
+      const toggleButton = card.querySelector('[data-vlm-toggle]');
+      if (toggleButton) {
+        toggleButton.textContent = expanded ? '收起输出' : '展开输出';
+        toggleButton.setAttribute('aria-expanded', expanded ? 'true' : 'false');
+      }
+    }
+
+    function setClusterVlmExpanded(clusterIndex, expanded) {
+      if (!Number.isInteger(clusterIndex)) {
+        return;
+      }
+      if (expanded) {
+        state.vlmExpandedClusters.add(clusterIndex);
+      } else {
+        state.vlmExpandedClusters.delete(clusterIndex);
+      }
+      const section = getClusterSection(clusterIndex);
+      const card = section?.querySelector('.vlm-log-card');
+      applyClusterVlmExpandedState(card, expanded);
     }
 
     function setClusterSimilarityThreshold(value) {
@@ -1039,25 +1167,43 @@
 
     function ensureClusterLog(clusterIndex, clusterId) {
       const existing = state.vlmLogMap.get(clusterIndex);
-      if (existing) {
+      if (existing && existing.card?.isConnected) {
         return existing;
       }
 
-      if (vlmLogList.querySelector('.empty')) {
-        vlmLogList.innerHTML = '';
+      const section = getClusterSection(clusterIndex);
+      if (!section) {
+        return null;
       }
+
+      const host = section.querySelector('[data-cluster-log-host]');
+      if (!host) {
+        return null;
+      }
+
+      host.innerHTML = '';
 
       const card = document.createElement('article');
       card.className = 'vlm-log-card';
+      const expanded = state.vlmExpandedClusters.has(clusterIndex);
+      card.dataset.expanded = expanded ? 'true' : 'false';
       card.innerHTML = `
         <div class="vlm-log-header">
           <strong>Cluster ${escapeHtml(clusterId)}</strong>
-          <span class="chip">running</span>
+          <div class="chip-row">
+            <span class="chip">running</span>
+            <button class="vlm-toggle-button" type="button" data-vlm-toggle="${clusterIndex}" aria-expanded="${expanded ? 'true' : 'false'}">${expanded ? '收起输出' : '展开输出'}</button>
+          </div>
         </div>
         <div class="picked-summary">等待模型输出...</div>
-        <div class="vlm-log-output"></div>
+        <div class="cluster-vlm-sections">
+          <div class="cluster-vlm-block">
+            <strong>Streaming</strong>
+            <div class="vlm-log-output"></div>
+          </div>
+        </div>
       `;
-      vlmLogList.appendChild(card);
+      host.appendChild(card);
 
       const record = {
         card,
@@ -1071,15 +1217,20 @@
 
     function appendVlmToken(clusterIndex, clusterId, text, isThinking) {
       const record = ensureClusterLog(clusterIndex, clusterId);
+      if (!record) {
+        return;
+      }
       const span = document.createElement('span');
       span.className = isThinking ? 'thinking-token' : 'answer-token';
       span.textContent = text;
       record.output.appendChild(span);
-      record.card.scrollIntoView({ block: 'nearest' });
     }
 
     function markVlmClusterDone(clusterIndex, clusterId, selectedImageId, contentText) {
       const record = ensureClusterLog(clusterIndex, clusterId);
+      if (!record) {
+        return;
+      }
       record.statusChip.textContent = selectedImageId === null ? 'no pick' : `pick ${selectedImageId}`;
       record.summary.textContent = selectedImageId === null
         ? '未能解析 {"select": N}。'
@@ -1088,6 +1239,9 @@
 
     function markVlmClusterSkipped(clusterIndex, clusterId, selectedImageId) {
       const record = ensureClusterLog(clusterIndex, clusterId);
+      if (!record) {
+        return;
+      }
       record.statusChip.textContent = 'skipped';
       record.summary.textContent = selectedImageId === null
         ? '这个 cluster 已跳过。'
@@ -1203,6 +1357,12 @@
         return;
       }
 
+      const rawConcurrency = Number(vlmConcurrencyInput.value);
+      const normalizedConcurrency = Number.isFinite(rawConcurrency)
+        ? Math.max(1, Math.floor(rawConcurrency))
+        : 4;
+      vlmConcurrencyInput.value = String(normalizedConcurrency);
+
       const payload = {
         result_path: getResultPath(),
         endpoint: vlmEndpointInput.value.trim(),
@@ -1211,6 +1371,7 @@
         api_key: vlmApiKeyInput.value,
         only_unpicked: vlmOnlyUnpickedCheckbox.checked,
         overwrite_existing: vlmOverwriteCheckbox.checked,
+        concurrency: normalizedConcurrency,
       };
 
       if (!payload.result_path) {
@@ -1224,11 +1385,10 @@
 
       state.vlmRunning = true;
       state.currentVlmJobId = null;
-      startVlmPickButton.disabled = true;
-      cancelVlmPickButton.disabled = false;
       setVlmDialogStatus('running');
       resetVlmLogs('准备开始 VLM 挑图...');
       state.vlmAbortController = new AbortController();
+      syncVlmActionButtons();
 
       try {
         const response = await fetch('/api/vlm/pick/stream', {
@@ -1262,7 +1422,7 @@
 
             if (event.type === 'start') {
               state.currentVlmJobId = event.job_id || null;
-              resetVlmLogs(`开始处理 ${payload.result_path}`);
+              resetVlmLogs(`开始处理 ${payload.result_path}，并发 ${event.concurrency || payload.concurrency}`);
               continue;
             }
 
@@ -1330,8 +1490,7 @@
         state.vlmRunning = false;
         state.currentVlmJobId = null;
         state.vlmAbortController = null;
-        startVlmPickButton.disabled = false;
-        cancelVlmPickButton.disabled = true;
+        syncVlmActionButtons();
       }
     }
 
@@ -1342,10 +1501,12 @@
       }
 
       clustersContainer.className = 'cluster-list';
-      clustersContainer.innerHTML = result.clusters.map(cluster => {
+      clustersContainer.innerHTML = result.clusters.map((cluster, clusterIndex) => {
+        cluster._ui_cluster_index = clusterIndex;
         const selectedId = clusterSelectedId(cluster);
         const selectedItem = findSelectedItem(cluster);
         const modelPickEntries = getModelPickEntries(cluster);
+        const persistedOutputBlock = renderPersistedVlmOutput(cluster);
         const compareBlock = modelPickEntries.length
           ? `
             <div class="model-compare-box">
@@ -1377,7 +1538,7 @@
           : '';
 
         return `
-        <article class="cluster-section">
+        <article class="cluster-section" data-cluster-index="${clusterIndex}">
           <div class="summary-header">
             <h3>Cluster ${cluster.cluster_id}</h3>
             <div class="chip-row">
@@ -1393,6 +1554,7 @@
                 ? 'VLM 已运行，但未能解析 {"select": N}。'
                 : `VLM 选择 image_id=${selectedId}。${escapeHtml(truncateText(cluster.vlm_pick.content_text || cluster.vlm_pick.transcript_text || ''))}`}</div>`
             : ''}
+          <div class="cluster-vlm-host" data-cluster-log-host="${clusterIndex}">${persistedOutputBlock}</div>
           ${selectedBlock}
           ${compareBlock}
           <div class="photo-wall">
@@ -1454,9 +1616,13 @@
       if (job.status === 'done') {
         renderResult(job.result);
       } else if (job.status === 'error') {
+        state.currentResult = null;
         renderEmpty(clustersContainer, `处理失败：${job.error}`);
+        updateVlmDialogContext();
       } else if (job.status === 'cancelled') {
+        state.currentResult = null;
         renderEmpty(clustersContainer, '任务已取消，没有继续展示聚类结果。');
+        updateVlmDialogContext();
       }
     }
 
@@ -1491,6 +1657,8 @@
         cancelButton.disabled = true;
         pickButton.disabled = false;
         clearCacheButton.disabled = false;
+        state.currentResult = null;
+        updateVlmDialogContext();
         setStatus('轮询失败', String(error), 0, []);
       }
     }
@@ -1513,7 +1681,10 @@
       cancelButton.disabled = false;
       pickButton.disabled = true;
       clearCacheButton.disabled = true;
-      startVlmPickButton.disabled = true;
+      state.currentResult = null;
+      state.vlmExpandedClusters = new Set();
+      state.vlmLogMap = new Map();
+      updateVlmDialogContext();
       renderEmpty(clustersContainer, '任务已开始，等待聚类结果。');
 
       try {
@@ -1537,7 +1708,7 @@
         cancelButton.disabled = true;
         pickButton.disabled = false;
         clearCacheButton.disabled = false;
-        startVlmPickButton.disabled = false;
+        updateVlmDialogContext();
         setStatus('启动失败', String(error), 0, []);
       }
     }
@@ -1591,6 +1762,7 @@
       workersInput.value = '8';
       vlmEndpointInput.value = defaults.vlm_endpoint || '';
       vlmPromptInput.value = defaults.vlm_prompt || '';
+      vlmConcurrencyInput.value = String(defaults.vlm_concurrency || 4);
       state.vlmDefaultsLoaded = true;
       setClusterSimilarityThreshold(state.clusterSimilarityThreshold);
       setStatus(
@@ -1602,6 +1774,7 @@
       updateVlmDialogContext();
       ensureVlmModelsLoaded();
       await refreshCacheStatus();
+      syncVlmActionButtons();
     }
 
     pickButton.addEventListener('click', pickDirectory);
@@ -1627,6 +1800,20 @@
       clearVlmPicks().catch(error => {
         resetVlmLogs(String(error));
       });
+    });
+    clustersContainer.addEventListener('click', event => {
+      const toggleButton = event.target.closest('[data-vlm-toggle]');
+      if (!toggleButton) {
+        return;
+      }
+      event.preventDefault();
+      event.stopPropagation();
+      const clusterIndex = Number(toggleButton.getAttribute('data-vlm-toggle'));
+      if (!Number.isInteger(clusterIndex)) {
+        return;
+      }
+      const expanded = !state.vlmExpandedClusters.has(clusterIndex);
+      setClusterVlmExpanded(clusterIndex, expanded);
     });
     similaritySlider.addEventListener('input', event => {
       setClusterSimilarityThreshold(event.target.value);

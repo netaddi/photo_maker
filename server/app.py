@@ -11,7 +11,7 @@ from uuid import uuid4
 
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.responses import FileResponse, HTMLResponse, StreamingResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from cluster_photos import (
     JobCancelledError,
@@ -22,6 +22,7 @@ from cluster_photos import (
 from convert_raw_to_jpg import OUTPUT_DIR
 from photo_description_config import API_BASE_URL
 from vlm_pick import (
+    DEFAULT_VLM_CONCURRENCY,
     DEFAULT_VLM_PICK_PROMPT,
     VlmPickCancelledError,
     clear_vlm_pick_results,
@@ -68,6 +69,7 @@ class VlmPickRequest(BaseModel):
     api_key: str = ""
     only_unpicked: bool = True
     overwrite_existing: bool = False
+    concurrency: int = Field(default=DEFAULT_VLM_CONCURRENCY, ge=1, le=32)
 
 
 class VlmClearRequest(BaseModel):
@@ -76,6 +78,43 @@ class VlmClearRequest(BaseModel):
 
 def utc_now() -> str:
     return datetime.now(timezone.utc).isoformat()
+
+
+def log_vlm_event(job_id: str, event: dict[str, Any]) -> None:
+    event_type = str(event.get("type", "unknown"))
+    cluster_id = event.get("cluster_id")
+
+    if event_type == "token":
+        token_text = str(event.get("text", ""))
+        token_kind = "thinking" if event.get("is_thinking") else "content"
+        print(
+            f"[VLM][{job_id}][cluster={cluster_id}][{token_kind}] {token_text}",
+            flush=True,
+        )
+        return
+
+    if event_type == "cluster_start":
+        print(
+            f"[VLM][{job_id}] cluster_start cluster={cluster_id} image_count={event.get('image_count')}",
+            flush=True,
+        )
+        return
+
+    if event_type == "cluster_done":
+        print(
+            f"[VLM][{job_id}] cluster_done cluster={cluster_id} select={event.get('select')} label={event.get('label', '')}",
+            flush=True,
+        )
+        return
+
+    if event_type == "cluster_skipped":
+        print(
+            f"[VLM][{job_id}] cluster_skipped cluster={cluster_id} select={event.get('select')}",
+            flush=True,
+        )
+        return
+
+    print(f"[VLM][{job_id}] {json.dumps(event, ensure_ascii=False)}", flush=True)
 
 
 def get_job(job_id: str) -> dict[str, Any]:
@@ -256,6 +295,7 @@ def defaults() -> dict[str, Any]:
         "browse_root": str(browse_root.resolve()),
         "vlm_endpoint": API_BASE_URL,
         "vlm_prompt": DEFAULT_VLM_PICK_PROMPT,
+        "vlm_concurrency": DEFAULT_VLM_CONCURRENCY,
     }
 
 
@@ -343,6 +383,7 @@ def vlm_pick_stream(request: VlmPickRequest) -> StreamingResponse:
         event_queue: queue.Queue[dict[str, Any] | None] = queue.Queue()
 
         def emit(event: dict[str, Any]) -> None:
+            log_vlm_event(vlm_job_id, event)
             event_queue.put(event)
 
         def worker() -> None:
@@ -356,6 +397,7 @@ def vlm_pick_stream(request: VlmPickRequest) -> StreamingResponse:
                     api_key=request.api_key,
                     only_unpicked=request.only_unpicked,
                     overwrite_existing=request.overwrite_existing,
+                    concurrency=request.concurrency,
                     event_callback=emit,
                     cancel_check=lambda: is_vlm_job_cancelled(vlm_job_id),
                 )
@@ -372,6 +414,7 @@ def vlm_pick_stream(request: VlmPickRequest) -> StreamingResponse:
                     message="VLM 挑图已取消",
                     finished_at=utc_now(),
                 )
+                print(f"[VLM][{vlm_job_id}] cancelled", flush=True)
                 event_queue.put({"type": "cancelled", "job_id": vlm_job_id, "message": "VLM 挑图已取消"})
             except Exception as exc:
                 update_vlm_job(
@@ -381,6 +424,7 @@ def vlm_pick_stream(request: VlmPickRequest) -> StreamingResponse:
                     error=str(exc),
                     finished_at=utc_now(),
                 )
+                print(f"[VLM][{vlm_job_id}] error: {exc}", flush=True)
                 event_queue.put({"type": "error", "message": str(exc)})
             finally:
                 event_queue.put(None)
@@ -388,7 +432,11 @@ def vlm_pick_stream(request: VlmPickRequest) -> StreamingResponse:
         thread = threading.Thread(target=worker, daemon=True)
         thread.start()
 
-        yield f"data: {json.dumps({'type': 'start', 'job_id': vlm_job_id, 'result_path': str(result_path)}, ensure_ascii=False)}\n\n"
+        print(
+            f"[VLM][{vlm_job_id}] start endpoint={request.endpoint} model={request.model} concurrency={request.concurrency} result_path={result_path}",
+            flush=True,
+        )
+        yield f"data: {json.dumps({'type': 'start', 'job_id': vlm_job_id, 'result_path': str(result_path), 'concurrency': request.concurrency}, ensure_ascii=False)}\n\n"
 
         while True:
             event = event_queue.get()

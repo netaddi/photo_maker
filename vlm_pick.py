@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+from concurrent.futures import ThreadPoolExecutor, as_completed
 import json
 import re
 import socket
+import threading
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable, Iterator
@@ -25,6 +27,8 @@ SYSTEM_PROMPT = (
 
 VlmEventCallback = Callable[[dict[str, Any]], None]
 CancelCheck = Callable[[], bool]
+STREAM_OPEN_TIMEOUT_SECONDS = 3600
+DEFAULT_VLM_CONCURRENCY = 4
 
 
 class VlmPickCancelledError(RuntimeError):
@@ -157,14 +161,24 @@ def iter_stream_json_chunks(
     )
     ensure_not_cancelled(cancel_check)
     try:
-        with request.urlopen(req, timeout=5) as response:
+        with request.urlopen(req, timeout=STREAM_OPEN_TIMEOUT_SECONDS) as response:
             while True:
                 ensure_not_cancelled(cancel_check)
                 try:
                     raw_line = response.readline()
-                except socket.timeout:
+                except (socket.timeout, TimeoutError):
                     ensure_not_cancelled(cancel_check)
+                    raise RuntimeError(
+                        f"Streaming response timed out after waiting {STREAM_OPEN_TIMEOUT_SECONDS} seconds for more tokens"
+                    )
                     continue
+                except OSError as exc:
+                    ensure_not_cancelled(cancel_check)
+                    if "timed out object" in str(exc).lower():
+                        raise RuntimeError(
+                            f"Streaming response timed out after waiting {STREAM_OPEN_TIMEOUT_SECONDS} seconds for more tokens"
+                        ) from exc
+                    raise
                 if not raw_line:
                     break
                 line = raw_line.decode("utf-8", errors="replace").strip()
@@ -335,6 +349,100 @@ def clear_vlm_pick_results(result_path: Path) -> dict[str, Any]:
     }
 
 
+def resolve_existing_pick_state(
+    cluster: dict[str, Any],
+    payload: dict[str, Any],
+    current_model_key: str,
+) -> tuple[dict[str, Any] | None, dict[str, Any] | None, int | None]:
+    existing_pick = normalize_cluster_vlm_pick(cluster, payload)
+    existing_selected_value = None
+    existing_model_pick = None
+    if isinstance(existing_pick, dict):
+        existing_by_model = existing_pick.get("by_model")
+        if isinstance(existing_by_model, dict):
+            model_entry = existing_by_model.get(current_model_key)
+            if isinstance(model_entry, dict):
+                existing_model_pick = model_entry
+                if isinstance(model_entry.get("select"), int):
+                    existing_selected_value = model_entry.get("select")
+                elif isinstance(model_entry.get("selected_image_id"), int):
+                    existing_selected_value = model_entry.get("selected_image_id")
+        elif isinstance(existing_pick.get("select"), int):
+            existing_selected_value = existing_pick.get("select")
+            existing_model_pick = existing_pick
+        elif isinstance(existing_pick.get("selected_image_id"), int):
+            existing_selected_value = existing_pick.get("selected_image_id")
+            existing_model_pick = existing_pick
+
+    return existing_pick, existing_model_pick, existing_selected_value
+
+
+def hydrate_existing_pick_for_model(
+    cluster: dict[str, Any],
+    *,
+    existing_pick: dict[str, Any],
+    existing_model_pick: dict[str, Any],
+    existing_selected_value: int,
+    current_model_key: str,
+    normalized_endpoint: str,
+    model: str,
+) -> None:
+    existing_model_pick.setdefault("select", existing_selected_value)
+    existing_model_pick.setdefault("selected_image_id", existing_selected_value)
+    existing_model_pick.setdefault("selection_json", {"select": existing_selected_value})
+    existing_model_pick.setdefault("model_key", current_model_key)
+    existing_model_pick.setdefault("label", model_cache_label(existing_model_pick))
+    by_model = existing_pick.setdefault("by_model", {})
+    if isinstance(by_model, dict):
+        by_model[current_model_key] = existing_model_pick
+    existing_pick["current_model_key"] = current_model_key
+    existing_pick["select"] = existing_selected_value
+    existing_pick["selected_image_id"] = existing_selected_value
+    existing_pick["selection_json"] = existing_model_pick.get("selection_json", {"select": existing_selected_value})
+    existing_pick["endpoint"] = normalized_endpoint
+    existing_pick["model"] = model
+    existing_pick["label"] = existing_model_pick.get("label", model_cache_label(existing_model_pick))
+    cluster["vlm_pick"] = existing_pick
+
+
+def apply_model_pick_result(
+    cluster: dict[str, Any],
+    *,
+    current_model_key: str,
+    model_entry: dict[str, Any],
+    normalized_endpoint: str,
+    model: str,
+    prompt: str,
+    only_unpicked: bool,
+    overwrite_existing: bool,
+) -> dict[str, Any]:
+    raw_cluster_pick = cluster.get("vlm_pick")
+    cluster_pick: dict[str, Any] = raw_cluster_pick if isinstance(raw_cluster_pick, dict) else {}
+    raw_by_model = cluster_pick.get("by_model")
+    by_model: dict[str, Any] = raw_by_model if isinstance(raw_by_model, dict) else {}
+    by_model[current_model_key] = model_entry
+
+    cluster["vlm_pick"] = {
+        **cluster_pick,
+        "current_model_key": current_model_key,
+        "by_model": by_model,
+        "label": model_entry["label"],
+        "select": model_entry["selected_image_id"],
+        "selected_image_id": model_entry["selected_image_id"],
+        "selection_json": model_entry["selection_json"],
+        "content_text": model_entry["content_text"],
+        "thinking_text": model_entry["thinking_text"],
+        "transcript_text": model_entry["transcript_text"],
+        "endpoint": normalized_endpoint,
+        "model": model,
+        "prompt": prompt,
+        "only_unpicked": only_unpicked,
+        "overwrite_existing": overwrite_existing,
+        "updated_at": utc_now(),
+    }
+    return cluster["vlm_pick"]
+
+
 def run_vlm_pick(
     *,
     result_path: Path,
@@ -344,6 +452,7 @@ def run_vlm_pick(
     api_key: str = "",
     only_unpicked: bool = True,
     overwrite_existing: bool = False,
+    concurrency: int = DEFAULT_VLM_CONCURRENCY,
     event_callback: VlmEventCallback | None = None,
     cancel_check: CancelCheck | None = None,
 ) -> dict[str, Any]:
@@ -352,6 +461,8 @@ def run_vlm_pick(
         raise ValueError("model is required")
     if not prompt.strip():
         raise ValueError("prompt is required")
+    if concurrency < 1:
+        raise ValueError("concurrency must be >= 1")
 
     ensure_not_cancelled(cancel_check)
 
@@ -368,39 +479,34 @@ def run_vlm_pick(
         "selection_format": {"select": 0},
         "only_unpicked": only_unpicked,
         "overwrite_existing": overwrite_existing,
+        "concurrency": concurrency,
         "updated_at": utc_now(),
         "cluster_count": len(clusters),
     }
     current_model_key = str(payload["vlm_pick"]["model_key"])
+    payload_lock = threading.Lock()
 
-    for cluster_index, cluster in enumerate(clusters):
+    def process_cluster(cluster_index: int, cluster: dict[str, Any]) -> None:
         ensure_not_cancelled(cancel_check)
-        if not isinstance(cluster, dict):
-            continue
 
-        items = cluster.get("items", [])
-        if not isinstance(items, list) or not items:
-            continue
+        with payload_lock:
+            if not isinstance(cluster, dict):
+                return
 
-        existing_pick = normalize_cluster_vlm_pick(cluster, payload)
-        existing_selected_value = None
-        existing_model_pick = None
-        if isinstance(existing_pick, dict):
-            by_model = existing_pick.get("by_model")
-            if isinstance(by_model, dict):
-                model_entry = by_model.get(current_model_key)
-                if isinstance(model_entry, dict):
-                    existing_model_pick = model_entry
-                    if isinstance(model_entry.get("select"), int):
-                        existing_selected_value = model_entry.get("select")
-                    elif isinstance(model_entry.get("selected_image_id"), int):
-                        existing_selected_value = model_entry.get("selected_image_id")
-            elif isinstance(existing_pick.get("select"), int):
-                existing_selected_value = existing_pick.get("select")
-                existing_model_pick = existing_pick
-            elif isinstance(existing_pick.get("selected_image_id"), int):
-                existing_selected_value = existing_pick.get("selected_image_id")
-                existing_model_pick = existing_pick
+            items = cluster.get("items", [])
+            if not isinstance(items, list) or not items:
+                return
+
+            cluster_id = cluster.get("cluster_id")
+            cluster_snapshot = {
+                "cluster_id": cluster_id,
+                "items": [dict(item) for item in items if isinstance(item, dict)],
+            }
+            existing_pick, existing_model_pick, existing_selected_value = resolve_existing_pick_state(
+                cluster,
+                payload,
+                current_model_key,
+            )
 
         has_existing_pick = isinstance(existing_selected_value, int)
         if overwrite_existing:
@@ -412,49 +518,44 @@ def run_vlm_pick(
 
         if not should_process:
             if isinstance(existing_pick, dict) and isinstance(existing_model_pick, dict) and existing_selected_value is not None:
-                existing_model_pick.setdefault("select", existing_selected_value)
-                existing_model_pick.setdefault("selected_image_id", existing_selected_value)
-                existing_model_pick.setdefault("selection_json", {"select": existing_selected_value})
-                existing_model_pick.setdefault("model_key", current_model_key)
-                existing_model_pick.setdefault("label", model_cache_label(existing_model_pick))
-                by_model = existing_pick.setdefault("by_model", {})
-                if isinstance(by_model, dict):
-                    by_model[current_model_key] = existing_model_pick
-                existing_pick["current_model_key"] = current_model_key
-                existing_pick["select"] = existing_selected_value
-                existing_pick["selected_image_id"] = existing_selected_value
-                existing_pick["selection_json"] = existing_model_pick.get("selection_json", {"select": existing_selected_value})
-                existing_pick["endpoint"] = normalized_endpoint
-                existing_pick["model"] = model
-                existing_pick["label"] = existing_model_pick.get("label", model_cache_label(existing_model_pick))
-                write_result_json(result_path, payload)
+                with payload_lock:
+                    hydrate_existing_pick_for_model(
+                        cluster,
+                        existing_pick=existing_pick,
+                        existing_model_pick=existing_model_pick,
+                        existing_selected_value=existing_selected_value,
+                        current_model_key=current_model_key,
+                        normalized_endpoint=normalized_endpoint,
+                        model=model,
+                    )
+                    write_result_json(result_path, payload)
 
             if event_callback is not None:
                 event_callback(
                     {
                         "type": "cluster_skipped",
                         "cluster_index": cluster_index,
-                        "cluster_id": cluster.get("cluster_id"),
+                        "cluster_id": cluster_id,
                         "reason": "already_picked",
                         "select": existing_selected_value,
                     }
                 )
-            continue
+            return
 
         if event_callback is not None:
             event_callback(
                 {
                     "type": "cluster_start",
                     "cluster_index": cluster_index,
-                    "cluster_id": cluster.get("cluster_id"),
-                    "image_count": len(items),
+                    "cluster_id": cluster_id,
+                    "image_count": len(cluster_snapshot["items"]),
                 }
             )
 
         reasoning_parts: list[str] = []
         content_parts: list[str] = []
         all_parts: list[str] = []
-        messages = build_messages(cluster, prompt)
+        messages = build_messages(cluster_snapshot, prompt)
 
         for chunk in iter_stream_json_chunks(
             normalized_endpoint,
@@ -475,7 +576,7 @@ def run_vlm_pick(
                         {
                             "type": "token",
                             "cluster_index": cluster_index,
-                            "cluster_id": cluster.get("cluster_id"),
+                            "cluster_id": cluster_id,
                             "text": text,
                             "is_thinking": is_thinking,
                         }
@@ -485,9 +586,9 @@ def run_vlm_pick(
 
         content_text = "".join(content_parts).strip()
         transcript_text = "".join(all_parts).strip()
-        selected_image_id, selection_json = parse_selected_image_id(content_text, len(items))
+        selected_image_id, selection_json = parse_selected_image_id(content_text, len(cluster_snapshot["items"]))
         if selected_image_id is None:
-            selected_image_id, selection_json = parse_selected_image_id(transcript_text, len(items))
+            selected_image_id, selection_json = parse_selected_image_id(transcript_text, len(cluster_snapshot["items"]))
 
         if selection_json is None and selected_image_id is not None:
             selection_json = {"select": selected_image_id}
@@ -509,44 +610,40 @@ def run_vlm_pick(
             "updated_at": utc_now(),
         }
 
-        cluster_pick = cluster.get("vlm_pick") if isinstance(cluster.get("vlm_pick"), dict) else {}
-        by_model = cluster_pick.get("by_model") if isinstance(cluster_pick.get("by_model"), dict) else {}
-        by_model[current_model_key] = model_entry
-
-        cluster["vlm_pick"] = {
-            **cluster_pick,
-            "current_model_key": current_model_key,
-            "by_model": by_model,
-            "label": model_entry["label"],
-            "select": selected_image_id,
-            "selected_image_id": selected_image_id,
-            "selection_json": selection_json,
-            "content_text": content_text,
-            "thinking_text": model_entry["thinking_text"],
-            "transcript_text": transcript_text,
-            "endpoint": normalized_endpoint,
-            "model": model,
-            "prompt": prompt,
-            "only_unpicked": only_unpicked,
-            "overwrite_existing": overwrite_existing,
-            "updated_at": utc_now(),
-        }
-
-        write_result_json(result_path, payload)
+        with payload_lock:
+            cluster_pick = apply_model_pick_result(
+                cluster,
+                current_model_key=current_model_key,
+                model_entry=model_entry,
+                normalized_endpoint=normalized_endpoint,
+                model=model,
+                prompt=prompt,
+                only_unpicked=only_unpicked,
+                overwrite_existing=overwrite_existing,
+            )
+            write_result_json(result_path, payload)
 
         if event_callback is not None:
             event_callback(
                 {
                     "type": "cluster_done",
                     "cluster_index": cluster_index,
-                    "cluster_id": cluster.get("cluster_id"),
+                    "cluster_id": cluster_id,
                     "selected_image_id": selected_image_id,
                     "select": selected_image_id,
                     "label": model_entry["label"],
                     "content_text": content_text,
-                    "thinking_text": cluster["vlm_pick"]["thinking_text"],
+                    "thinking_text": cluster_pick["thinking_text"],
                 }
             )
+
+    with ThreadPoolExecutor(max_workers=concurrency) as executor:
+        futures = [
+            executor.submit(process_cluster, cluster_index, cluster)
+            for cluster_index, cluster in enumerate(clusters)
+        ]
+        for future in as_completed(futures):
+            future.result()
 
     payload["vlm_pick"]["updated_at"] = utc_now()
     write_result_json(result_path, payload)
